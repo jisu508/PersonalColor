@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>근거를 보여주는 AI 퍼스널컬러 진단</title>
+    <!-- 기존: <link rel="stylesheet" href="style.css"> -->
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>AI 퍼스널컬러 진단</h1>
+            <p>흰 종이를 들고 찍은 사진을 업로드하여 정확한 결과를 확인하세요.</p>
+        </header>
+
+        <!-- 이미지 업로드 섹션 -->
+        <section id="upload-section" class="card">
+            <div class="upload-area" id="upload-area">
+                <input type="file" id="image-upload" accept="image/jpeg, image/png" hidden>
+                <label for="image-upload" class="upload-label">
+                    <span class="upload-icon">📸</span>
+                    <span>사진 업로드 (클릭 또는 드래그)</span>
+                </label>
+            </div>
+            <button id="submit-btn" class="btn-primary" disabled>진단 시작하기</button>
+        </section>
+
+        <!-- 로딩 화면 -->
+        <section id="loading-section" class="card hidden">
+            <div class="spinner"></div>
+            <p>조명 보정 및 피부/색상을 추출 중입니다...</p>
+        </section>
+
+        <!-- 결과 화면 -->
+        <section id="result-section" class="hidden">
+            <!-- 신뢰도 -->
+            <div class="card reliability-card">
+                <h3 id="reliability-text">신뢰도: 측정 중...</h3>
+                <p id="reliability-desc" class="sub-text">조명 및 사진 품질을 분석했습니다.</p>
+            </div>
+
+            <!-- 퍼센티지 판정 -->
+            <div class="card percentage-card">
+                <h2>퍼센티지 진단 결과</h2>
+                <div class="progress-container">
+                    <span id="primary-season-label" class="season-label">1순위 시즌</span>
+                    <div class="progress-bar">
+                        <div id="primary-progress" class="progress-fill primary"></div>
+                    </div>
+                    <span id="primary-percent">0%</span>
+                </div>
+                <div class="progress-container">
+                    <span id="secondary-season-label" class="season-label">2순위 시즌</span>
+                    <div class="progress-bar">
+                        <div id="secondary-progress" class="progress-fill secondary"></div>
+                    </div>
+                    <span id="secondary-percent">0%</span>
+                </div>
+                <p id="borderline-analysis" class="sub-text analysis-text"></p>
+            </div>
+
+            <!-- 조명 자동 보정 검증 -->
+            <div class="card correction-card">
+                <h2>조명 보정 (White Balancing)</h2>
+                <div class="image-comparison">
+                    <div class="img-box">
+                        <span class="badge">원본</span>
+                        <img id="img-original" src="" alt="원본 사진">
+                    </div>
+                    <div class="img-box">
+                        <span class="badge">보정 후</span>
+                        <img id="img-corrected" src="" alt="보정된 사진">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 디지털 드레이핑 -->
+            <div class="card draping-card">
+                <h2>디지털 드레이핑 (근거 제시)</h2>
+                <div class="draping-container">
+                    <img id="img-draping" src="" alt="드레이핑 결과">
+                    <p class="sub-text">얼굴 밑 색상에 따른 밝기 변화를 확인하세요.</p>
+                </div>
+            </div>
+
+            <button id="reset-btn" class="btn-secondary">다시 검사하기</button>
+        </section>
+    </div>
+    <!-- 기존: <script src="main.js"></script> -->
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
