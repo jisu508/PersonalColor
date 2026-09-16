@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 가상환경
 venv/
 .venv/
@@ -24,3 +25,20 @@ Thumbs.db
 *.jpeg
 *.png
 !screenshots/**
+=======
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 결과물(자동 생성)은 커밋하지 않음
+outputs/*
+!outputs/.gitkeep
+
+# 인물 사진은 개인정보 → 절대 GitHub에 올리지 않음
+data/samples/*
+!data/samples/.gitkeep
+!data/samples/README.md
+>>>>>>> cb52133b05b7c88d2a4a29b7b75298c7020168ba
