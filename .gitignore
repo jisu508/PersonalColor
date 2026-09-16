@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # 가상환경
 venv/
 .venv/
@@ -25,7 +25,7 @@ Thumbs.db
 *.jpeg
 *.png
 !screenshots/**
-=======
+
 __pycache__/
 *.pyc
 .venv/
@@ -41,4 +41,4 @@ outputs/*
 data/samples/*
 !data/samples/.gitkeep
 !data/samples/README.md
->>>>>>> cb52133b05b7c88d2a4a29b7b75298c7020168ba
+
