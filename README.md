@@ -177,27 +177,40 @@ print(wb.warnings)                                         # 품질 경고 (없�
 | 6 | 파이프라인 연결 | ⬜ |
 | 7 | 웹 (Flask + 웹캠) | ⬜ |
 
-## 5. Git 협업
+## 5. Git 협업 (main 에 바로 push 하는 방식)
 
 레포: https://github.com/jisu508/PersonalColor
 
+### 매번 작업할 때 순서
+
 ```powershell
-# 작업 시작 전: 최신 main 받기
-git checkout main
-git pull
+git pull origin main               # ① 작업 시작 전: 팀원이 올린 최신 코드 받기
 
-# 내 파트 브랜치 만들기 (예: feat/face-color, feat/season, feat/web, docs/test-plan)
-git checkout -b feat/face-color
+# ... 코드 작업 ...
 
-# ... 코드 작업 + python -m pytest tests 통과 확인 ...
-
+python -m pytest tests             # ② 올리기 전: 테스트 통과 확인
 git add .
-git status                 # .jpg 사진이 목록에 없는지 확인!
-git commit -m "3단계: 볼·이마 피부 Lab 추출"
-git push -u origin feat/face-color
-# → GitHub 레포 화면의 "Compare & pull request" 버튼 → PR 생성 → 팀원 확인 후 Merge
+git status                         #    .jpg 사진 / .venv / __pycache__ 가 목록에 없는지 확인!
+git commit -m "무엇을 했는지 한 줄로"
+git pull origin main               # ③ 올리기 직전: 그사이 올라온 코드 한 번 더 받기
+git push origin main               # ④ 올리기
 ```
 
-- `main` 은 항상 돌아가는 상태 유지. 직접 push 하지 않고 PR 로 병합.
-- 병합 전 `python -m pytest tests` 통과 확인.
-- **인물 사진은 절대 커밋하지 않기** (`data/samples/`, `outputs/` 는 `.gitignore` 처리됨).
+### 팀 규칙
+
+1. **작업 전과 push 직전에 항상 `git pull origin main`.**
+   push 가 `! [rejected] ... (fetch first)` 로 거절되면 → 그사이 누가 먼저 올린 것.
+   `git pull origin main` 후 다시 `git push origin main` 하면 된다.
+2. **push 전 `python -m pytest tests` 통과 확인.** main 에 바로 반영되므로 고장 난 코드를 올리면 팀 전원이 멈춘다.
+3. **자기 파트 폴더 위주로 수정.** 같은 파일을 동시에 고치면 충돌이 난다.
+   README·requirements.txt 같은 공통 파일을 고칠 땐 단톡에 먼저 알리기.
+4. **인물 사진은 절대 커밋하지 않기** (`data/samples/`, `outputs/` 는 `.gitignore` 처리됨).
+
+### pull 할 때 충돌(CONFLICT)이 나면
+
+```
+CONFLICT (content): Merge conflict in 파일이름
+```
+1. 해당 파일을 열면 `<<<<<<<`, `=======`, `>>>>>>>` 표시가 있다. 위쪽이 내 코드, 아래쪽이 팀원 코드.
+2. 둘 중 맞는 내용만 남기고 표시 세 줄을 지운다. (모르겠으면 그 파일 담당 팀원에게 물어보기)
+3. `git add 파일이름` → `git commit -m "충돌 해결"` → `git push origin main`
