@@ -27,7 +27,8 @@ personal_color/
 │   ├── image_io.py            공용: 한글 경로 안전한 사진 읽기/저장        [공용]
 │   ├── vision/                ── 사진 → 색 숫자 ──                        [영상처리]
 │   │   ├── lighting.py        ✅ 2단계  흰 종이 기준 조명 보정
-│   │   └── face_color.py      ⬜ 3단계  MediaPipe 얼굴 → 피부·눈·머리 Lab
+│   │   ├── landmarks.py       ✅ 3단계  MediaPipe 얼굴 478점(홍채 포함) 검출
+│   │   └── face_color.py      ✅ 3단계  볼·이마·홍채 → 피부·눈 Lab (머리는 2주차)
 │   ├── diagnosis/             ── 색 숫자 → 판정 ──                        [알고리즘]
 │   │   ├── season.py          ⬜ 4단계  기준표 거리 → softmax → 퍼센티지
 │   │   └── confidence.py      ⬜ 5단계  신뢰도 0~100%
@@ -36,18 +37,23 @@ personal_color/
 ├── web/                       ⬜ 7단계  Flask + getUserMedia 촬영 화면    [웹]
 │   ├── templates/  static/js/  static/css/
 │
+├── models/                    MediaPipe 모델 파일 (face_landmarker.task, 레포에 포함)
+│
 ├── data/
 │   ├── reference/             시즌 기준표 JSON (4단계)                    [알고리즘]
 │   └── samples/               테스트 사진 (GitHub 업로드 금지)
 │
 ├── tools/                     사람이 직접 돌려보는 확인용 스크립트
 │   ├── find_coords.py         사진 클릭 → 좌표 박스 출력 (구 find_coords.py)
-│   └── check_lighting.py      조명 보정 전/후 비교 (구 check2.py)
+│   ├── check_lighting.py      조명 보정 전/후 비교 (구 check2.py)
+│   ├── draw_landmarks.py      얼굴 478점이 제대로 잡히는지 그려보기
+│   └── check_face_color.py    부위별 색 자동 추출 + 두 사진 비교
 │
 ├── tests/                     자동 테스트 (pytest)                        [테스트]
-│   └── test_lighting.py
+│   ├── test_lighting.py
+│   └── test_face_color.py
 ├── notebooks/                 Jupyter 실험 (기준표 튜닝 등)
-├── docs/                      실험 기록·발표 자료                          [문서]
+├── docs/                      일정표·데이터 형식(data_format.md)·실험 기록   [문서]
 └── outputs/                   실행 결과 이미지 (자동 생성, 커밋 X)
 ```
 
@@ -81,7 +87,8 @@ cd PersonalColor
 # (2) 라이브러리 설치
 python -m pip install -r requirements.txt
 
-# (3) 설치 확인 — "10 passed" 가 나오면 성공
+# (3) 설치 확인 — 사진이 없으면 "16 passed, 3 skipped", 사진까지 넣었으면 "19 passed" 가 정상
+#     (MediaPipe 가 W0000 ... 같은 로그를 출력하는데 오류가 아니므로 무시)
 python -m pytest tests -v
 ```
 
@@ -152,6 +159,25 @@ start outputs\lighting_compare.jpg
 
 사진 1장만 확인: `python tools/check_lighting.py --photo data/samples/photo1.jpg --white 645,1817,725,1897`
 
+### (4) 얼굴 점(랜드마크) 확인 — 3단계
+
+```powershell
+python tools/draw_landmarks.py data/samples/photo1.jpg
+```
+→ `outputs\landmarks_photo1.jpg` (초록=얼굴 점, 빨강=홍채 점). `--numbers` 를 붙이면 점 번호까지 표시.
+
+### (5) 얼굴 부위별 색 자동 추출 — 3단계 (좌표 클릭 필요 없음)
+
+```powershell
+python tools/check_face_color.py --photo data/samples/photo1.jpg --white 645,1817,725,1897 --photo data/samples/photo3.jpg --white 745,3130,825,3210
+```
+
+- 사진마다 볼·이마·홍채의 Lab, 사용 여부(O/X), 제외 이유 출력
+- 마지막에 두 사진의 **피부·눈 색 차이(보정 전 → 후)** 비교
+- 영역 그림: `outputs\face_color_photo1.jpg` (초록=사용, 빨강=제외, 하늘색=눈꺼풀 윤곽)
+- `--white` 를 빼면 조명 보정 없이 추출만 확인
+
+
 코드에서 쓰기:
 
 ```python
@@ -163,6 +189,11 @@ img = imread("data/samples/photo1.jpg")
 wb = white_balance(img, white_box=(645, 1817, 725, 1897))
 print(mean_lab(wb.image, box=(1116, 1827, 1196, 1907)))   # 보정 후 볼 Lab
 print(wb.warnings)                                         # 품질 경고 (없으면 [])
+
+from backend.vision.face_color import extract_face_colors
+fc = extract_face_colors(wb.image)                         # 얼굴 자동 검출 → 부위별 색
+print(fc.skin, fc.eye)                                     # 피부 Lab, 눈 Lab
+print(fc.to_dict())                                        # 알고리즘 파트로 넘기는 형식 (docs/data_format.md)
 ```
 
 ## 4. 진행 현황
@@ -170,8 +201,8 @@ print(wb.warnings)                                         # 품질 경고 (없�
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | 폴더 구조 · README | ✅ |
-| 2 | 조명 보정 함수화 (check2.py 기반) | ✅ 테스트 10개 통과, photo1·photo3 실측 22.8 → 15.2 (check2 원본 결과와 동일) |
-| 3 | MediaPipe 얼굴·색 자동 추출 | ⬜ |
+| 2 | 조명 보정 함수화 (check2.py 기반) | ✅ photo1·photo3 실측 22.8 → 15.2 (check2 원본 결과와 동일) |
+| 3 | MediaPipe 얼굴·색 자동 추출 | 🟡 피부·눈 ✅ (피부 a·b 차이 15.2 → 3.4) / 머리카락·품질 지표는 2주차 |
 | 4 | 시즌 퍼센티지 판정 | ⬜ |
 | 5 | 신뢰도 | ⬜ |
 | 6 | 파이프라인 연결 | ⬜ |

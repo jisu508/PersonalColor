@@ -96,3 +96,13 @@ def delta_e(lab1, lab2) -> float:
     대략 기준:  ~2 사람 눈으로 거의 구분 불가 / ~10 확실히 다름 / 20+ 전혀 다른 색
     """
     return float(np.linalg.norm(np.asarray(lab1, float) - np.asarray(lab2, float)))
+
+
+def bgr_pixels_to_lab(pixels_bgr: np.ndarray) -> np.ndarray:
+    """
+    픽셀 목록 (N, 3) BGR uint8 → (N, 3) Lab 실수.
+    사진 전체를 변환하지 않고 '필요한 픽셀만' 변환하므로 큰 사진에서 빠르다.
+    (3단계 face_color.py 에서 볼·홍채 픽셀만 골라 변환할 때 사용)
+    """
+    px = np.asarray(pixels_bgr, dtype=np.uint8).reshape(-1, 1, 3)
+    return bgr_to_lab(px).reshape(-1, 3)
