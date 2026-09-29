@@ -83,9 +83,22 @@ def test_borderline_has_small_gap():
     assert diagnose_season({"skin": [65, 12, t]}).gap < diagnose_season({"skin": [65, 12, t + 8]}).gap
 
 
-def test_compare_methods_returns_all_three():
+def test_compare_methods_returns_all_four():
     out = compare_methods(WARM)
-    assert set(out) == {"b", "paper_d", "smtc"}
+    assert set(out) == {"bc", "b", "paper_d", "smtc"}
+
+
+def test_bc_method_runs_and_is_negative():
+    """b - C 방법은 계산은 되지만 항상 0 이하 값이 나온다 (비교용으로만 남겨둠)"""
+    import numpy as np
+    for a, b in [(5, 20), (20, 5), (10, 10)]:
+        score, detail = warm_cool_score({"skin": [70, a, b]}, method="bc")
+        assert detail["D_bc"] <= 0
+
+
+def test_default_method_is_b():
+    """현재 기본 판정 방법은 b (연예인 사진 27장 검증 85%)"""
+    assert load_reference()["warm_cool"]["method"] == "b"
 
 
 def test_missing_skin_raises():

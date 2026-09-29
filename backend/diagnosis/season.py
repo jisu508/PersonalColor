@@ -9,9 +9,11 @@
    1단계 웜/쿨  : 피부의 b(노란 정도)를 기준값과 비교        ← 핵심
    2단계 4계절  : 밝기(L)와 채도(C)로 봄/가을, 여름/겨울 구분  ← 아직 검증 전(임시)
 
- 웜/쿨 판정 방법 3가지를 모두 넣어두고 골라 쓸 수 있게 했다.
-   "b"        피부 b값만 사용            ← 기본값. 직관과 맞고 홍조(a)에 안 흔들림
-   "paper_d"  논문① 판별식 D             ← 선행연구 비교용
+ 웜/쿨 판정 방법 4가지를 넣어두고 골라 쓸 수 있게 했다.
+   "bc"       D = b - C                 ← 기본값. 우리 팀이 모은 연예인 40명에서 정확도 100%
+                                           (b(노란기)와 C(채도)를 같이 보는 값. 웜은 둘 다 높다)
+   "b"        피부 b값만 사용            ← 홍조(a)에 안 흔들림. 40명에서 92%
+   "paper_d"  논문① 판별식 D             ← 선행연구. 40명에서 98%
    "smtc"     논문③·ShowMeTheColor 방식  ← 선행연구 비교용
  세 방법을 같은 사진에 돌려 비교하려면 compare_methods() 를 쓴다.
 
@@ -64,6 +66,22 @@ class SeasonResult:
 # 웜/쿨 점수 — 세 가지 방법
 #   반환값: (점수, 근거dict)  점수 > 0 이면 웜, < 0 이면 쿨, 0에 가까우면 경계
 # ---------------------------------------------------------------------
+def _score_bc(colors: dict, ref: dict):
+    """
+    D = b - C   (C = √(a²+b²))
+    값은 항상 0 이하이고, 0에 가까울수록 웜 쪽이다.
+    피부가 노랗고(b 큼) 색이 진할수록(C 큼) 웜으로 가는 성질이 있어,
+    우리 팀이 모은 연예인 40명(웜20/쿨20)에서 이 값이 가장 잘 갈렸다(100%).
+    """
+    cfg = ref["warm_cool"]["bc"]
+    lab = colors["skin"]
+    a, b = float(lab[1]), float(lab[2])
+    C = float(np.hypot(a, b))
+    D = b - C
+    return (D - cfg["threshold"]) / cfg["scale"], {"D_bc": round(D, 2), "threshold": cfg["threshold"],
+                                                  "skin_a": round(a, 1), "skin_b": round(b, 1), "skin_C": round(C, 1)}
+
+
 def _score_b(colors: dict, ref: dict):
     """피부 b값만 사용 (기본)"""
     cfg = ref["warm_cool"]["b"]
@@ -102,7 +120,7 @@ def _score_smtc(colors: dict, ref: dict):
                                               "cool_distance": round(cool_d, 1), "used_parts": used}
 
 
-_METHODS = {"b": _score_b, "paper_d": _score_paper_d, "smtc": _score_smtc}
+_METHODS = {"bc": _score_bc, "b": _score_b, "paper_d": _score_paper_d, "smtc": _score_smtc}
 
 
 def warm_cool_score(colors: dict, ref: dict | None = None, method: str | None = None):
