@@ -38,3 +38,11 @@ def imwrite(path: str | Path, img: np.ndarray, quality: int = 92) -> Path:
         raise ValueError(f"이미지 인코딩 실패: {path}")
     buf.tofile(str(path))
     return path
+
+
+def imdecode_bytes(data: bytes) -> np.ndarray:
+    """업로드된 이미지 바이트를 BGR 배열로 (웹에서 사용)"""
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("이미지로 읽을 수 없는 데이터입니다.")
+    return img

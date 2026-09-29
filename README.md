@@ -27,12 +27,13 @@ personal_color/
 │   ├── image_io.py            공용: 한글 경로 안전한 사진 읽기/저장        [공용]
 │   ├── vision/                ── 사진 → 색 숫자 ──                        [영상처리]
 │   │   ├── lighting.py        ✅ 2단계  흰 종이 기준 조명 보정
+│   │   ├── paper.py           ✅ 흰 종이 자동 검출 (웹 가이드 박스 좌표도 처리)
 │   │   ├── landmarks.py       ✅ 3단계  MediaPipe 얼굴 478점(홍채 포함) 검출
 │   │   └── face_color.py      ✅ 3단계  볼·이마·홍채 → 피부·눈 Lab (머리는 2주차)
 │   ├── diagnosis/             ── 색 숫자 → 판정 ──                        [알고리즘]
-│   │   ├── season.py          ⬜ 4단계  기준표 거리 → softmax → 퍼센티지
-│   │   └── confidence.py      ⬜ 5단계  신뢰도 0~100%
-│   └── pipeline.py            ⬜ 6단계  사진 → 결과 dict (위 모듈 연결)
+│   │   ├── season.py          ✅ 4단계  웜/쿨 판정(3가지 방법) → 4계절 퍼센티지
+│   │   └── confidence.py      ✅ 5단계  신뢰도 0~100%
+│   └── pipeline.py            ✅ 6단계  사진 → 결과 dict (위 모듈 연결)
 │
 ├── web/                       ⬜ 7단계  Flask + getUserMedia 촬영 화면    [웹]
 │   ├── templates/  static/js/  static/css/
@@ -47,13 +48,16 @@ personal_color/
 │   ├── find_coords.py         사진 클릭 → 좌표 박스 출력 (구 find_coords.py)
 │   ├── check_lighting.py      조명 보정 전/후 비교 (구 check2.py)
 │   ├── draw_landmarks.py      얼굴 478점이 제대로 잡히는지 그려보기
-│   └── check_face_color.py    부위별 색 자동 추출 + 두 사진 비교
+│   ├── check_face_color.py    부위별 색 자동 추출 + 두 사진 비교
+│   ├── batch_extract.py       폴더 안 사진 여러 장 → Lab CSV (기준표 재료용)
+│   └── fit_threshold.py       라벨 붙은 사진 → 웜/쿨 경계값·정확도 계산
 │
 ├── tests/                     자동 테스트 (pytest)                        [테스트]
 │   ├── test_lighting.py
-│   └── test_face_color.py
+│   ├── test_face_color.py
+│   └── test_season.py
 ├── notebooks/                 Jupyter 실험 (기준표 튜닝 등)
-├── docs/                      일정표·데이터 형식(data_format.md)·실험 기록   [문서]
+├── docs/                      일정표·데이터 형식·기준표 계획(reference_table_plan.md)  [문서]
 └── outputs/                   실행 결과 이미지 (자동 생성, 커밋 X)
 ```
 
@@ -87,8 +91,8 @@ cd PersonalColor
 # (2) 라이브러리 설치
 python -m pip install -r requirements.txt
 
-# (3) 설치 확인 — 사진이 없으면 "16 passed, 3 skipped", 사진까지 넣었으면 "19 passed" 가 정상
-#     (MediaPipe 가 W0000 ... 같은 로그를 출력하는데 오류가 아니므로 무시)
+# (3) 설치 확인 — 사진이 없으면 "17 passed, 6 skipped" 가 정상
+#     사진까지 넣으면 23 passed (MediaPipe 가 W0000 ... 로그를 출력하는데 오류 아님)
 python -m pytest tests -v
 ```
 
@@ -159,6 +163,21 @@ start outputs\lighting_compare.jpg
 
 사진 1장만 확인: `python tools/check_lighting.py --photo data/samples/photo1.jpg --white 645,1817,725,1897`
 
+### (6) 전체 진단 한 번에 — 4~6단계
+
+```powershell
+python -c "from backend.image_io import imread; from backend.pipeline import run_pipeline; import json; print(json.dumps(run_pipeline(imread('data/samples/photo1.jpg')), ensure_ascii=False, indent=1))"
+```
+
+### (7) 웜/쿨 경계값 찾기 — 라벨 붙은 사진이 있을 때
+
+```powershell
+# 폴더 이름이 정답 라벨: data/collected/warm/, data/collected/cool/
+python tools/fit_threshold.py data/collected --no-wb --out outputs/fit.csv
+```
+→ 방법 3가지(b / 논문①D / 논문③)별로 **최적 경계값과 정확도**를 표로 보여줍니다.
+   쓸 방법을 정하면 `data/reference/season_reference.json` 의 threshold 를 그 값으로 바꿉니다.
+
 ### (4) 얼굴 점(랜드마크) 확인 — 3단계
 
 ```powershell
@@ -202,11 +221,11 @@ print(fc.to_dict())                                        # 알고리즘 파트
 |---|---|---|
 | 1 | 폴더 구조 · README | ✅ |
 | 2 | 조명 보정 함수화 (check2.py 기반) | ✅ photo1·photo3 실측 22.8 → 15.2 (check2 원본 결과와 동일) |
-| 3 | MediaPipe 얼굴·색 자동 추출 | 🟡 피부·눈 ✅ (피부 a·b 차이 15.2 → 3.4) / 머리카락·품질 지표는 2주차 |
-| 4 | 시즌 퍼센티지 판정 | ⬜ |
-| 5 | 신뢰도 | ⬜ |
-| 6 | 파이프라인 연결 | ⬜ |
-| 7 | 웹 (Flask + 웹캠) | ⬜ |
+| 3 | MediaPipe 얼굴·색 자동 추출 | ✅ 피부·눈·머리카락 + 사진 품질 지표 (피부 a·b 차이 15.2 → 3.4, 머리 2.5) |
+| 4 | 시즌 퍼센티지 판정 | 🟡 웜/쿨 3가지 방법 구현 ✅ / 경계값은 임시(사진 모이면 fit_threshold.py로 확정) |
+| 5 | 신뢰도 | ✅ 사진 품질 + 조명 경고 + 1·2위 격차 |
+| 6 | 파이프라인 연결 | ✅ run_pipeline() — 웹 연결 방법은 docs/web_integration.md |
+| 7 | 웹 (Flask + 웹캠) | 🟡 UI 완성 / 백엔드 연결 남음 |
 
 ## 5. Git 협업 (main 에 바로 push 하는 방식)
 
