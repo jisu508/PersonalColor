@@ -110,6 +110,23 @@ def apply_gains(img: np.ndarray, gains: np.ndarray) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+def gray_world_gains(img: np.ndarray) -> np.ndarray:
+    """
+    흰 종이가 없는 사진(수집한 연예인 사진 등)을 위한 **대체** 보정 배율.
+
+    원리 : "사진 전체의 평균색은 원래 무채색(회색)일 것"이라고 가정하고,
+           채널 평균이 서로 같아지도록 배율을 구한다 (Gray World 가정).
+    주의 : 흰 종이 보정보다 훨씬 부정확하다.
+           실측(photo1 vs photo3) 피부 a·b 차이 — 보정 없음 15.2 / 그레이월드 8.1 / 흰 종이 3.4
+           배경이 한 가지 색으로 크면(빨간 배경 등) 오히려 색이 틀어진다.
+           → 수집 사진을 '대충 같은 조건으로 맞추는' 용도로만 쓰고,
+             기준표의 절대 수치 근거로는 쓰지 않는다.
+    """
+    avg = img.reshape(-1, 3).astype(np.float32).mean(axis=0)
+    avg[avg == 0] = 1.0
+    return avg.mean() / avg
+
+
 def white_balance(img: np.ndarray, white_box: Box, target: float = 255.0) -> WhiteBalanceResult:
     """
     ★ 보통은 이 함수 하나만 쓰면 된다 ★

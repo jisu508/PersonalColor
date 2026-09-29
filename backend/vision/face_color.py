@@ -9,10 +9,13 @@
    보정된 사진 ─▶ ① 랜드마크 478점 ─▶ ② 점 번호로 부위 다각형/원 만들기
                ─▶ ③ 영역 안 픽셀 모으기 ─▶ ④ 이상한 픽셀 걸러내기 ─▶ ⑤ 평균 Lab
 
- 부위 (1주차 범위)
+ 부위
    - 피부 : 오른쪽 볼 + 왼쪽 볼 + 이마
    - 눈   : 양쪽 홍채 (눈꺼풀·동공·반사광 제외)
-   - 머리 : 2주차 예정 → 지금은 None
+   - 머리 : 머리카락 — 이마 위 띠 영역 + (앞머리로 가려진 이마) 중 '피부보다 어두운' 픽셀
+
+ 사진 품질 지표도 같이 계산한다 (5단계 신뢰도 재료)
+   밝기(피부 L) · 선명도(라플라시안 분산) · 얼굴 크기 · 좌우 비대칭(옆얼굴 판단)
 
  ④ 걸러내기가 중요한 이유
    볼 영역 안에도 번들거림(하얀 반사광), 그림자, 잔머리, 점이 섞인다.
@@ -52,6 +55,10 @@ EYE_CONTOURS = {
     "eye_right": [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
     "eye_left":  [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398],
 }
+# 머리카락: 이마 위쪽 가로줄 → 이를 위로 평행이동해 '머리 띠' 영역을 만든다
+#            (MediaPipe 에는 머리카락 점이 없어서 직접 만들어야 함)
+HAIRLINE = [103, 67, 109, 10, 338, 297, 332]
+
 # 홍채: 중심점 1개 + 테두리 4개
 IRIS = {"iris_a": (468, [469, 470, 471, 472]), "iris_b": (473, [474, 475, 476, 477])}
 
@@ -67,7 +74,17 @@ PARAMS = {
     "cheek_pair_warn_de": 8.0,  # 양 볼 색 차이가 이보다 크면 → 한쪽만 그늘졌다고 경고
     "iris_inner": 0.35,         # 홍채 반지름 중 안쪽 35% 는 동공(검정)으로 보고 제외
     "iris_outer": 0.90,         # 바깥 10% 는 흰자와 섞이는 경계라 제외
+    "iris_darker_than_skin": 10.0,  # 홍채는 피부보다 최소 이만큼 어둡다. 아니면 눈꺼풀을 잡은 것
     "min_face_width_ratio": 0.15,  # 얼굴 폭이 사진 폭의 15% 미만이면 '얼굴이 작다' 경고
+    # ── 머리카락 ──
+    "hair_band_ratio": 0.18,    # 이마 위로 얼굴 높이의 18% 만큼을 '머리 띠'로 본다
+    "hair_darker_than_skin": 15.0,  # 피부보다 L 이 이만큼 어두운 픽셀만 머리카락으로 인정
+    "hair_min_dark_ratio": 0.25,    # 띠 영역에서 어두운 픽셀이 25% 미만이면 → 배경만 잡힌 것으로 보고 제외
+    # ── 사진 품질 (5단계 신뢰도 재료) ──
+    "min_sharpness": 10.0,      # 얼굴을 가로 400px 로 맞춘 뒤 라플라시안 분산. 이보다 낮으면 흐림
+    "min_brightness": 35.0,     # 피부 L 하한 (너무 어두운 사진)
+    "max_brightness": 88.0,     # 피부 L 상한 (하얗게 날아간 사진)
+    "max_asymmetry": 0.15,      # 코~좌우 얼굴 끝 거리 차이 / 얼굴 폭. 크면 옆얼굴
 }
 
 
@@ -86,6 +103,19 @@ class RegionColor:
 
 
 @dataclass
+class PhotoQuality:
+    """사진 품질 지표 — 5단계 신뢰도 계산에 그대로 넘긴다"""
+    brightness: float      # 피부 밝기 L (0~100)
+    sharpness: float       # 선명도. 얼굴을 가로 400px 로 맞춘 뒤 라플라시안 분산 (클수록 또렷)
+    face_width_ratio: float
+    asymmetry: float       # 좌우 비대칭 (0 에 가까울수록 정면)
+
+    def to_dict(self) -> dict:
+        return {"brightness": round(self.brightness, 1), "sharpness": round(self.sharpness, 1),
+                "face_width_ratio": round(self.face_width_ratio, 3), "asymmetry": round(self.asymmetry, 3)}
+
+
+@dataclass
 class FaceColorResult:
     """
     extract_face_colors() 결과 — 알고리즘 파트로 넘기는 데이터.
@@ -95,6 +125,7 @@ class FaceColorResult:
     eye: np.ndarray | None                      # 눈동자 대표 Lab
     hair: np.ndarray | None                     # 머리카락 Lab (2주차 예정 → 현재 None)
     regions: dict[str, RegionColor]             # 부위별 상세
+    quality: PhotoQuality                       # 사진 품질 지표
     landmarks: FaceLandmarks                    # 디버그·시각화용
     warnings: list[str] = field(default_factory=list)
 
@@ -103,6 +134,7 @@ class FaceColorResult:
         return {
             "skin": r(self.skin), "eye": r(self.eye), "hair": r(self.hair),
             "regions": {k: v.to_dict() for k, v in self.regions.items()},
+            "quality": self.quality.to_dict(),
             "face": {"box": list(self.landmarks.face_box), "width_ratio": round(self.landmarks.face_width_ratio, 3),
                      "num_faces": self.landmarks.num_faces},
             "warnings": list(self.warnings),
@@ -194,6 +226,62 @@ def _iris(img, lm: FaceLandmarks, name: str) -> RegionColor:
     return RegionColor(lab=lab if ok else None, n_total=len(px), n_used=n, used=ok, note=note)
 
 
+def _hair_band_polygon(lm: FaceLandmarks) -> np.ndarray:
+    """이마 위쪽 가로줄을 얼굴 높이의 일정 비율만큼 위로 올려 '머리 띠' 다각형을 만든다."""
+    x1, y1, x2, y2 = lm.face_box
+    up = (y2 - y1) * PARAMS["hair_band_ratio"]
+    line = lm.points[HAIRLINE]
+    return np.vstack([line, (line - np.array([0, up], np.float32))[::-1]])
+
+
+def _hair(img, lm: FaceLandmarks, skin_lab) -> RegionColor:
+    """
+    머리카락 색. 머리 띠 + (앞머리로 제외된 이마) 안에서 '피부보다 충분히 어두운' 픽셀만 사용.
+      - 어두운 픽셀만 쓰는 이유 : 띠 안에 배경(벽·하늘)이 섞이기 때문
+      - 피부색을 모르면(볼 추출 실패) 머리색도 구하지 않는다
+    """
+    if skin_lab is None:
+        return RegionColor(lab=None, n_total=0, n_used=0, used=False, note="피부색을 몰라 머리색 판단 불가")
+
+    mask = polygon_mask(img.shape, _hair_band_polygon(lm))
+    if not getattr(_hair, "_skip_forehead", False):
+        mask |= polygon_mask(img.shape, lm.points[REGIONS["forehead"]])   # 앞머리에 가려진 이마도 머리로
+    px = pixels_in_mask(img, mask)
+    if len(px) == 0:
+        return RegionColor(lab=None, n_total=0, n_used=0, used=False, note="머리 영역이 사진 밖")
+
+    lab = bgr_pixels_to_lab(px)
+    dark = px[lab[:, 0] < skin_lab[0] - PARAMS["hair_darker_than_skin"]]
+    ratio = len(dark) / len(px)
+    if ratio < PARAMS["hair_min_dark_ratio"]:
+        return RegionColor(lab=None, n_total=len(px), n_used=len(dark), used=False,
+                           note=f"어두운 픽셀 {ratio:.0%} → 머리카락을 찾지 못함 (배경만 잡힘)")
+    hair_lab, n = robust_mean_lab(dark)
+    ok = hair_lab is not None and n >= PARAMS["min_pixels"]
+    return RegionColor(lab=hair_lab if ok else None, n_total=len(px), n_used=n, used=ok,
+                       note="" if ok else "유효 픽셀 부족")
+
+
+def _quality(img, lm: FaceLandmarks, skin_lab) -> PhotoQuality:
+    """사진 품질 지표 4가지"""
+    x1, y1, x2, y2 = lm.face_box
+    crop = img[max(0, y1):y2, max(0, x1):x2]
+    if crop.size == 0:
+        return PhotoQuality(0.0, 0.0, lm.face_width_ratio, 0.0)
+    # 얼굴 크기가 사진마다 달라도 같은 기준이 되도록 가로 400px 로 맞춘 뒤 선명도 측정
+    h = max(1, int(400 * crop.shape[0] / crop.shape[1]))
+    gray = cv2.cvtColor(cv2.resize(crop, (400, h)), cv2.COLOR_BGR2GRAY)
+    sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+    nose, left, right = lm.points[1], lm.points[234], lm.points[454]   # 코끝 / 얼굴 왼쪽 끝 / 오른쪽 끝
+    width = max(1.0, float(x2 - x1))
+    asym = abs(float(np.linalg.norm(nose - left) - np.linalg.norm(nose - right))) / width
+
+    brightness = float(skin_lab[0]) if skin_lab is not None else 0.0
+    return PhotoQuality(brightness=brightness, sharpness=sharpness,
+                        face_width_ratio=lm.face_width_ratio, asymmetry=asym)
+
+
 def extract_face_colors(img_bgr: np.ndarray, landmarks: FaceLandmarks | None = None) -> FaceColorResult:
     """
     ★ 보통 이 함수 하나만 쓰면 된다 ★
@@ -241,17 +329,43 @@ def extract_face_colors(img_bgr: np.ndarray, landmarks: FaceLandmarks | None = N
         warnings.append("볼 영역에서 피부색을 추출하지 못했습니다.")
 
     # ── 눈 대표색: 쓸 수 있는 홍채들의 평균 ──
+    # 눈을 감았거나 랜드마크가 밀리면 눈꺼풀(살색)을 홍채로 잡는다.
+    # 홍채는 피부보다 확실히 어두우므로, 그렇지 않으면 실패로 처리한다.
+    if skin is not None:
+        for k in IRIS:
+            r = regions[k]
+            if r.used and r.lab[0] > skin[0] - PARAMS["iris_darker_than_skin"]:
+                r.used = False
+                r.note = f"피부(L {skin[0]:.0f})보다 어둡지 않음 → 눈꺼풀을 잡은 것으로 보고 제외"
     irises = [regions[k] for k in IRIS if regions[k].used]
     eye = np.average([i.lab for i in irises], axis=0, weights=[i.n_used for i in irises]) if irises else None
     if eye is None:
         warnings.append("눈동자 색을 추출하지 못했습니다. 눈을 뜨고 정면을 봐주세요.")
+
+    # ── 머리카락 ──
+    regions["hair"] = _hair(img_bgr, lm, skin)
+    hair = regions["hair"].lab if regions["hair"].used else None
+    if hair is None and skin is not None:
+        warnings.append("머리카락 색을 추출하지 못했습니다. " + regions["hair"].note)
+
+    # ── 사진 품질 + 품질 경고 ──
+    quality = _quality(img_bgr, lm, skin)
+    if quality.sharpness < PARAMS["min_sharpness"]:
+        warnings.append(f"사진이 흐립니다 (선명도 {quality.sharpness:.0f}). 흔들리지 않게 다시 촬영해주세요.")
+    if skin is not None and quality.brightness < PARAMS["min_brightness"]:
+        warnings.append(f"사진이 어둡습니다 (피부 밝기 {quality.brightness:.0f}). 밝은 곳에서 촬영해주세요.")
+    if skin is not None and quality.brightness > PARAMS["max_brightness"]:
+        warnings.append(f"사진이 너무 밝습니다 (피부 밝기 {quality.brightness:.0f}). 빛이 직접 닿지 않게 해주세요.")
+    if quality.asymmetry > PARAMS["max_asymmetry"]:
+        warnings.append(f"얼굴이 옆으로 돌아가 있습니다 (비대칭 {quality.asymmetry:.2f}). 정면을 봐주세요.")
 
     if lm.num_faces > 1:
         warnings.append(f"얼굴이 {lm.num_faces}명 보입니다. 가장 큰 얼굴로 진단했어요.")
     if lm.face_width_ratio < PARAMS["min_face_width_ratio"]:
         warnings.append(f"얼굴이 작게 찍혔습니다 (사진 폭의 {lm.face_width_ratio:.0%}). 조금 더 가까이서 촬영해주세요.")
 
-    return FaceColorResult(skin=skin, eye=eye, hair=None, regions=regions, landmarks=lm, warnings=warnings)
+    return FaceColorResult(skin=skin, eye=eye, hair=hair, regions=regions, quality=quality,
+                           landmarks=lm, warnings=warnings)
 
 
 # ---------------------------------------------------------------------
@@ -265,6 +379,8 @@ def draw_regions(img_bgr: np.ndarray, result: FaceColorResult) -> np.ndarray:
     for name, idx in REGIONS.items():
         color = (0, 200, 0) if result.regions[name].used else (0, 0, 255)
         cv2.polylines(out, [np.round(P[idx]).astype(np.int32)], True, color, t)
+    hair_color = (0, 200, 0) if result.regions.get("hair") and result.regions["hair"].used else (0, 0, 255)
+    cv2.polylines(out, [np.round(_hair_band_polygon(result.landmarks)).astype(np.int32)], True, hair_color, t)
     for name, (ci, rim) in IRIS.items():
         c = P[ci]
         r = float(np.linalg.norm(P[rim] - c, axis=1).mean())

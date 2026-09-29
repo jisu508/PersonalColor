@@ -114,3 +114,39 @@ def test_real_skin_color_converges_after_white_balance(real_results):
     (b1, a1), (b3, a3) = real_results["photo1"], real_results["photo3"]
     ab = lambda x, y: float(np.linalg.norm((x - y)[1:]))   # noqa: E731
     assert ab(a1.skin, a3.skin) < ab(b1.skin, b3.skin) * 0.5
+
+
+# ───────────── [C] 2주차 추가분 (머리카락·품질·그레이월드) ─────────────
+def test_gray_world_makes_channels_equal():
+    """그레이월드 보정 후에는 채널 평균이 서로 같아져야 한다"""
+    from backend.vision.lighting import apply_gains, gray_world_gains
+    rng = np.random.default_rng(1)
+    img = np.clip(rng.normal([90, 130, 180], 25, (200, 200, 3)), 0, 255).astype(np.uint8)
+    out = apply_gains(img, gray_world_gains(img)).reshape(-1, 3).mean(axis=0)
+    assert out.max() - out.min() < 2.0
+
+
+@need_photos
+def test_real_hair_extracted(real_results):
+    """두 사진 모두 머리카락 색이 나오고, 피부보다 어두워야 한다"""
+    for name, (_, after) in real_results.items():
+        assert after.regions["hair"].used, (name, after.regions["hair"].note)
+        assert after.hair[0] < after.skin[0] - 10, name
+
+
+@need_photos
+def test_real_hair_color_similar_between_photos(real_results):
+    """같은 사람이므로 보정 후 머리카락 색(a·b)은 두 사진에서 비슷해야 한다"""
+    a1, a3 = real_results["photo1"][1], real_results["photo3"][1]
+    assert float(np.linalg.norm((a1.hair - a3.hair)[1:])) < 5.0
+
+
+@need_photos
+def test_real_quality_metrics_reasonable(real_results):
+    """정상적으로 찍힌 사진이므로 품질 경고(흐림·옆얼굴)가 없어야 한다"""
+    from backend.vision.face_color import PARAMS
+    for name, (_, after) in real_results.items():
+        q = after.quality
+        assert q.sharpness > PARAMS["min_sharpness"], name
+        assert q.asymmetry < PARAMS["max_asymmetry"], name
+        assert PARAMS["min_brightness"] < q.brightness < PARAMS["max_brightness"], name
