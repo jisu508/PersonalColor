@@ -32,7 +32,7 @@ from backend.vision.face_color import draw_regions, extract_face_colors    # noq
 from backend.vision.lighting import white_balance                          # noqa: E402
 
 LABELS = {"cheek_right": "오른쪽 볼", "cheek_left": "왼쪽 볼", "forehead": "이마",
-          "iris_a": "홍채 A", "iris_b": "홍채 B"}
+          "iris_a": "홍채 A", "iris_b": "홍채 B", "hair": "머리카락"}
 
 
 def parse_box(text):
@@ -72,12 +72,15 @@ def main():
         print(f"   {'부위':<8}{'사용':<5}{'픽셀(사용/전체)':<18}Lab ({'보정 후' if after else '보정 없음'})")
         for key, r in shown.regions.items():
             mark = "O" if r.used else "X"
-            print(f"   {LABELS[key]:<8}{mark:<5}{f'{r.n_used}/{r.n_total}':<18}{fmt(r.lab)}  {r.note}")
+            name = LABELS.get(key, key)
+            print(f"   {name:<8}{mark:<5}{f'{r.n_used}/{r.n_total}':<18}{fmt(r.lab)}  {r.note}")
         if after:
             print(f"   ▶ 피부 : 보정 전 {fmt(before.skin)}  →  보정 후 {fmt(after.skin)}")
+            print(f"   ▶ 머리 : 보정 전 {fmt(before.hair)}  →  보정 후 {fmt(after.hair)}")
             print(f"   ▶ 눈   : 보정 전 {fmt(before.eye)}  →  보정 후 {fmt(after.eye)}")
         else:
             print(f"   ▶ 피부 : {fmt(before.skin)}")
+            print(f"   ▶ 머리 : {fmt(before.hair)}")
             print(f"   ▶ 눈   : {fmt(before.eye)}")
         print("   경고   : " + (" / ".join(shown.warnings) if shown.warnings else "없음"))
 

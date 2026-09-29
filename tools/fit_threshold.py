@@ -41,8 +41,8 @@ from backend.image_io import imread                                    # noqa: E
 from backend.pipeline import run_pipeline                              # noqa: E402
 
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-METHODS = ["bc", "b", "paper_d", "smtc"]
-RAW = {"bc": lambda d: d.get("D_bc"), "b": lambda d: d.get("skin_b"), "paper_d": lambda d: d.get("D"),
+METHODS = ["bc", "hue", "b", "paper_d", "smtc"]
+RAW = {"bc": lambda d: d.get("D_bc"), "hue": lambda d: d.get("hue_deg"), "b": lambda d: d.get("skin_b"), "paper_d": lambda d: d.get("D"),
        "smtc": lambda d: (d.get("cool_distance", 0) - d.get("warm_distance", 0))}
 
 
@@ -123,7 +123,7 @@ def main():
         print("라벨 붙은 사진이 너무 적어 경계값을 찾을 수 없습니다. (최소 4장, 권장 20장 이상)")
     else:
         print(f"\n{'방법':<10}{'경계값':>10}{'정확도':>9}{'웜 정확도':>11}{'쿨 정확도':>11}   설명")
-        desc = {"bc": "b - C (현재 기본값)", "b": "피부 b값만", "paper_d": "논문① 판별식 D",
+        desc = {"bc": "b - C (현재 기본값)", "hue": "색상각 h", "b": "피부 b값만", "paper_d": "논문① 판별식 D",
                 "smtc": "논문③·ShowMeTheColor"}
         for m in METHODS:
             vals = [r.get(m) for r in ok]

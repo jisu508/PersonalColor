@@ -80,12 +80,32 @@ def test_borderline_has_small_gap():
     """경계에 있는 사람은 1·2위 격차가 작아야 한다(= 퍼센티지로 보여줄 값)"""
     ref = load_reference()
     t = ref["warm_cool"]["b"]["threshold"]
-    assert diagnose_season({"skin": [65, 12, t]}).gap < diagnose_season({"skin": [65, 12, t + 8]}).gap
+    near = diagnose_season({"skin": [65, 12, t]}, method="b").gap
+    far = diagnose_season({"skin": [65, 12, t + 8]}, method="b").gap
+    assert near < far
 
 
-def test_compare_methods_returns_all_four():
+def test_top_season_matches_warm_cool_side():
+    """웜/쿨 판정과 1위 시즌의 방향이 어긋나면 안 된다"""
+    for skin in ([65, 25.6, 23.5], [65, 10.4, 14.1], [65, 13.9, 17.1], [70, 8, 25]):
+        r = diagnose_season({"skin": skin})
+        assert r.top.endswith(r.warm_cool.replace("warm", "warm").replace("cool", "cool")), (skin, r.top, r.warm_cool)
+
+
+def test_compare_methods_returns_all_methods():
     out = compare_methods(WARM)
-    assert set(out) == {"bc", "b", "paper_d", "smtc"}
+    assert set(out) == {"bc", "hue", "b", "paper_d", "smtc"}
+
+
+def test_bc_and_hue_match_webcam_labels():
+    """라벨이 확실한 웹캠 3장: 웜 2명 / 쿨 1명 을 bc·hue 가 맞혀야 한다"""
+    warm = [(10.4, 14.1), (13.9, 17.1)]     # 523_05, 328_04
+    cool = [(25.6, 23.5)]                   # 328_03 (홍조가 심한 쿨)
+    for m in ("bc", "hue"):
+        for a, b in warm:
+            assert warm_cool_score({"skin": [65, a, b]}, method=m)[0] > 0, (m, a, b)
+        for a, b in cool:
+            assert warm_cool_score({"skin": [65, a, b]}, method=m)[0] < 0, (m, a, b)
 
 
 def test_bc_method_runs_and_is_negative():
@@ -96,9 +116,9 @@ def test_bc_method_runs_and_is_negative():
         assert detail["D_bc"] <= 0
 
 
-def test_default_method_is_b():
-    """현재 기본 판정 방법은 b (연예인 사진 27장 검증 85%)"""
-    assert load_reference()["warm_cool"]["method"] == "b"
+def test_default_method_is_bc():
+    """현재 기본 판정 방법은 bc (웹캠 사진 기준)"""
+    assert load_reference()["warm_cool"]["method"] == "bc"
 
 
 def test_missing_skin_raises():

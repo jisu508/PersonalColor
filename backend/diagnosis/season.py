@@ -10,10 +10,12 @@
    2단계 4계절  : 밝기(L)와 채도(C)로 봄/가을, 여름/겨울 구분  ← 아직 검증 전(임시)
 
  웜/쿨 판정 방법 4가지를 넣어두고 골라 쓸 수 있게 했다.
-   "bc"       D = b - C                 ← 기본값. 우리 팀이 모은 연예인 40명에서 정확도 100%
-                                           (b(노란기)와 C(채도)를 같이 보는 값. 웜은 둘 다 높다)
-   "b"        피부 b값만 사용            ← 홍조(a)에 안 흔들림. 40명에서 92%
-   "paper_d"  논문① 판별식 D             ← 선행연구. 40명에서 98%
+   "bc"       D = b - C                 ← 기본값. 웹캠 사진에서 웜/쿨을 제대로 갈랐다
+                                           (b를 채도 C와 견주는 값이라 홍조가 심해도 덜 흔들림)
+   "hue"      색상각 h = atan2(b, a)     ← bc 와 성질이 비슷. 붉은 쪽이면 작고 노란 쪽이면 크다
+   "b"        피부 b값만 사용            ← 연예인 사진(보정된 화보)에서는 85%로 가장 좋았지만,
+                                           웹캠에서는 홍조가 심한 사람을 웜으로 잘못 본다
+   "paper_d"  논문① 판별식 D             ← 선행연구 비교용
    "smtc"     논문③·ShowMeTheColor 방식  ← 선행연구 비교용
  세 방법을 같은 사진에 돌려 비교하려면 compare_methods() 를 쓴다.
 
@@ -82,6 +84,20 @@ def _score_bc(colors: dict, ref: dict):
                                                   "skin_a": round(a, 1), "skin_b": round(b, 1), "skin_C": round(C, 1)}
 
 
+def _score_hue(colors: dict, ref: dict):
+    """
+    색상각 h = atan2(b, a)  (도 단위)
+    피부색이 '붉은 쪽'이면 작고 '노란 쪽'이면 크다. 채도(색의 진하기)와 무관해서
+    조명이 세거나 홍조가 있어도 덜 흔들린다.
+    """
+    cfg = ref["warm_cool"]["hue"]
+    lab = colors["skin"]
+    a, b = float(lab[1]), float(lab[2])
+    h = float(np.degrees(np.arctan2(b, a)))
+    return (h - cfg["threshold"]) / cfg["scale"], {"hue_deg": round(h, 1), "threshold": cfg["threshold"],
+                                                  "skin_a": round(a, 1), "skin_b": round(b, 1)}
+
+
 def _score_b(colors: dict, ref: dict):
     """피부 b값만 사용 (기본)"""
     cfg = ref["warm_cool"]["b"]
@@ -120,7 +136,8 @@ def _score_smtc(colors: dict, ref: dict):
                                               "cool_distance": round(cool_d, 1), "used_parts": used}
 
 
-_METHODS = {"bc": _score_bc, "b": _score_b, "paper_d": _score_paper_d, "smtc": _score_smtc}
+_METHODS = {"bc": _score_bc, "hue": _score_hue, "b": _score_b,
+            "paper_d": _score_paper_d, "smtc": _score_smtc}
 
 
 def warm_cool_score(colors: dict, ref: dict | None = None, method: str | None = None):
@@ -145,8 +162,9 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
 
     계산 방법
       1) 웜/쿨 점수, 밝기 점수, 채도 점수 세 개를 구한다 (각각 0 기준으로 ±)
-      2) 시즌 4개는 이 세 축에서 각각 +1/-1 위치를 갖는다 (JSON에 정의)
-      3) 내 점수와 각 시즌 위치의 거리를 재고, softmax 로 퍼센티지로 바꾼다
+      2) 웜 대 쿨 비율을 먼저 정한다 (예: 웜 70% / 쿨 30%)
+      3) 각 쪽 안에서 밝기·채도로 두 계절을 나눈다 (봄 vs 가을 / 여름 vs 겨울)
+      4) 둘을 곱해 시즌 4개의 퍼센티지를 만든다 → 1위 시즌은 항상 웜/쿨 판정과 같은 쪽
     """
     ref = ref or load_reference()
     method = method or ref["warm_cool"]["method"]
@@ -163,26 +181,37 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
     chroma = (C - axis["chroma"]["center"]) / axis["chroma"]["scale"]
 
     # 점수가 너무 크면 한쪽으로만 쏠리므로 -2 ~ +2 로 제한
-    v = np.clip([warm, light, chroma], -2.0, 2.0)
+    v_warm, v_light, v_chroma = np.clip([warm, light, chroma], -2.0, 2.0)
 
-    names, dists = [], []
-    for key, s in ref["seasons"].items():
-        center = np.array([s["warm"], s["light"], s["chroma"]], dtype=float)
-        # 웜/쿨 축에 2배 비중 (웜/쿨이 먼저 갈리고, 나머지는 보조)
-        weight = np.array([2.0, 1.0, 1.0])
-        names.append(key)
-        dists.append(float(np.sqrt((weight * (v - center) ** 2).sum())))
+    # ── 퍼센티지는 두 단계로 계산한다 ──────────────────────────
+    # 1) 웜 대 쿨 비율을 먼저 정한다 (웜/쿨 점수를 0~1 로 변환)
+    #    경계에 있으면 50:50 에 가깝고, 확실하면 90:10 처럼 벌어진다
+    p_warm = float(1.0 / (1.0 + np.exp(-v_warm * 1.6)))
+    p_cool = 1.0 - p_warm
 
-    d = np.array(dists)
-    logits = -d / max(1e-6, ref.get("softmax_temperature", 1.2))
-    p = np.exp(logits - logits.max())
-    p = 100.0 * p / p.sum()
+    # 2) 같은 쪽 안에서 밝기·채도로 두 계절을 나눈다
+    #    (봄 vs 가을 / 여름 vs 겨울)
+    temp = max(1e-6, ref.get("softmax_temperature", 1.2))
+    seasons: dict[str, float] = {}
+    for side, side_p in ((1, p_warm), (-1, p_cool)):
+        keys = [k for k, sv in ref["seasons"].items() if sv["warm"] == side]
+        d = []
+        for k in keys:
+            sv = ref["seasons"][k]
+            d.append(float(np.hypot(v_light - sv["light"], v_chroma - sv["chroma"])))
+        logits = -np.array(d) / temp
+        w = np.exp(logits - logits.max())
+        w = w / w.sum()
+        for k, ww in zip(keys, w):
+            seasons[k] = float(side_p * ww * 100.0)
 
+    names = list(seasons)
+    p = np.array([seasons[k] for k in names])
     order = np.argsort(-p)
-    seasons = {names[i]: float(p[i]) for i in range(len(names))}
     detail.update({"skin_L": round(L, 1), "skin_C": round(C, 1),
-                   "axis": {"warm": round(float(v[0]), 2), "light": round(float(v[1]), 2),
-                            "chroma": round(float(v[2]), 2)},
+                   "axis": {"warm": round(float(v_warm), 2), "light": round(float(v_light), 2),
+                            "chroma": round(float(v_chroma), 2)},
+                   "warm_percent": round(p_warm * 100, 1),
                    "provisional_second_axis": True})
 
     return SeasonResult(seasons=seasons, top=names[order[0]], runner_up=names[order[1]],
