@@ -53,14 +53,16 @@ class SeasonResult:
     runner_up: str           # 2위 시즌 키
     gap: float               # 1위 - 2위 (신뢰도 계산에 사용)
     warm_score: float        # 0보다 크면 웜 쪽 (경계에서 얼마나 떨어졌는지)
-    warm_cool: str           # "warm" 또는 "cool"
+    warm_cool: str           # "warm" / "cool" / "borderline"(경계형)
     method: str              # 쓴 판정 방법
+    warm_percent: float = 50.0   # 웜일 확률 0~100
     detail: dict = field(default_factory=dict)   # 근거 숫자들
 
     def to_dict(self) -> dict:
         return {"seasons": {k: round(v, 1) for k, v in self.seasons.items()},
                 "top": self.top, "runner_up": self.runner_up, "gap": round(self.gap, 1),
-                "warm_cool": self.warm_cool, "warm_score": round(self.warm_score, 2),
+                "warm_cool": self.warm_cool, "warm_percent": round(self.warm_percent, 1),
+                "warm_score": round(self.warm_score, 2),
                 "method": self.method, "detail": self.detail}
 
 
@@ -180,13 +182,14 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
     light = (L - axis["lightness"]["center"]) / axis["lightness"]["scale"]
     chroma = (C - axis["chroma"]["center"]) / axis["chroma"]["scale"]
 
-    # 점수가 너무 크면 한쪽으로만 쏠리므로 -2 ~ +2 로 제한
-    v_warm, v_light, v_chroma = np.clip([warm, light, chroma], -2.0, 2.0)
+    # 점수가 너무 크면 한쪽으로만 쏠리므로 -3 ~ +3 으로 제한
+    v_warm, v_light, v_chroma = np.clip([warm, light, chroma], -3.0, 3.0)
 
     # ── 퍼센티지는 두 단계로 계산한다 ──────────────────────────
     # 1) 웜 대 쿨 비율을 먼저 정한다 (웜/쿨 점수를 0~1 로 변환)
     #    경계에 있으면 50:50 에 가깝고, 확실하면 90:10 처럼 벌어진다
-    p_warm = float(1.0 / (1.0 + np.exp(-v_warm * 1.6)))
+    #    웜 확률 = 1 / (1 + e^-((h - 기준선) / 폭))     ← 팀 합의 공식
+    p_warm = float(1.0 / (1.0 + np.exp(-v_warm)))
     p_cool = 1.0 - p_warm
 
     # 2) 같은 쪽 안에서 밝기·채도로 두 계절을 나눈다
@@ -214,9 +217,18 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
                    "warm_percent": round(p_warm * 100, 1),
                    "provisional_second_axis": True})
 
+    # 경계형: 기준선에서 ±band 안이면 웜/쿨을 단정하지 않는다 (예: h 50~58°)
+    cfg = ref["warm_cool"][method]
+    band = cfg.get("borderline_band")
+    if band is not None and abs(warm) * cfg.get("scale", 1.0) <= band + 1e-6:
+        verdict = "borderline"
+    else:
+        verdict = "warm" if warm > 0 else "cool"
+
     return SeasonResult(seasons=seasons, top=names[order[0]], runner_up=names[order[1]],
                         gap=float(p[order[0]] - p[order[1]]), warm_score=float(warm),
-                        warm_cool="warm" if warm > 0 else "cool", method=method, detail=detail)
+                        warm_cool=verdict, warm_percent=p_warm * 100.0,
+                        method=method, detail=detail)
 
 
 def compare_methods(colors: dict, ref: dict | None = None) -> dict:

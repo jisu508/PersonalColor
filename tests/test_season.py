@@ -85,11 +85,12 @@ def test_borderline_has_small_gap():
     assert near < far
 
 
-def test_top_season_matches_warm_cool_side():
-    """웜/쿨 판정과 1위 시즌의 방향이 어긋나면 안 된다"""
-    for skin in ([65, 25.6, 23.5], [65, 10.4, 14.1], [65, 13.9, 17.1], [70, 8, 25]):
+def test_top_season_matches_warm_percent():
+    """웜 확률이 50%가 넘으면 1위 시즌도 웜 쪽이어야 한다 (앞뒤가 맞아야 함)"""
+    for skin in ([65, 25.6, 23.5], [65, 10.4, 14.1], [65, 13.9, 17.1], [70, 8, 25], [70, 20, 8]):
         r = diagnose_season({"skin": skin})
-        assert r.top.endswith(r.warm_cool.replace("warm", "warm").replace("cool", "cool")), (skin, r.top, r.warm_cool)
+        side = "warm" if r.warm_percent >= 50 else "cool"
+        assert r.top.endswith(side), (skin, r.top, r.warm_percent)
 
 
 def test_compare_methods_returns_all_methods():
@@ -97,15 +98,23 @@ def test_compare_methods_returns_all_methods():
     assert set(out) == {"bc", "hue", "b", "paper_d", "smtc"}
 
 
-def test_bc_and_hue_match_webcam_labels():
-    """라벨이 확실한 웹캠 3장: 웜 2명 / 쿨 1명 을 bc·hue 가 맞혀야 한다"""
-    warm = [(10.4, 14.1), (13.9, 17.1)]     # 523_05, 328_04
-    cool = [(25.6, 23.5)]                   # 328_03 (홍조가 심한 쿨)
-    for m in ("bc", "hue"):
-        for a, b in warm:
-            assert warm_cool_score({"skin": [65, a, b]}, method=m)[0] > 0, (m, a, b)
-        for a, b in cool:
-            assert warm_cool_score({"skin": [65, a, b]}, method=m)[0] < 0, (m, a, b)
+def test_hue_matches_webcam_labels():
+    """라벨이 확실한 웹캠 3장(현재 파이프라인 측정값): 웜 51.2°, 50.0° / 쿨 43.1°"""
+    import numpy as np
+    for h_deg, expect in ((51.2, "warm"), (50.0, "warm"), (43.1, "cool"), (33.0, "cool")):
+        a = 10.0
+        b = a * np.tan(np.radians(h_deg))
+        r = diagnose_season({"skin": [65, a, b]})
+        assert r.warm_cool == expect, (h_deg, r.warm_cool, r.warm_percent)
+
+
+def test_borderline_band_marks_middle():
+    """기준선 부근(±band)은 웜/쿨을 단정하지 않고 '경계형' 으로 표시한다"""
+    import numpy as np
+    ref = load_reference()["warm_cool"]["hue"]
+    a = 10.0
+    b = a * np.tan(np.radians(ref["threshold"]))
+    assert diagnose_season({"skin": [65, a, b]}).warm_cool == "borderline"
 
 
 def test_bc_method_runs_and_is_negative():
@@ -116,9 +125,9 @@ def test_bc_method_runs_and_is_negative():
         assert detail["D_bc"] <= 0
 
 
-def test_default_method_is_bc():
-    """현재 기본 판정 방법은 bc (웹캠 사진 기준)"""
-    assert load_reference()["warm_cool"]["method"] == "bc"
+def test_default_method_is_hue():  # noqa: D401
+    """현재 기본 판정 방법은 색상각 hue (팀 결정)"""
+    assert load_reference()["warm_cool"]["method"] == "hue"
 
 
 def test_missing_skin_raises():

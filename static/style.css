@@ -7,6 +7,8 @@
     --btn-ink: #071227;
 }
 
+button { font-family: inherit; }
+
 * { 
     box-sizing: border-box; 
     margin: 0; 
@@ -16,13 +18,15 @@
 body {
     background: var(--bg-dark);
     color: var(--ink);
-    font-family: 'Hanken Grotesk', -apple-system, 'Segoe UI', sans-serif;
+    font-family: 'Jua', 'Nanum Round', 'Apple SD Gothic Neo', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     padding: 40px 20px;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    word-break: keep-all;
+    font-synthesis: none;
 }
 
 /* 배경 효과 (은은한 빛 번짐) */
@@ -36,7 +40,7 @@ body::before {
 
 .app-container {
     width: 100%;
-    max-width: 540px; /* 모바일 앱 비율에 맞춘 최대 너비 */
+    max-width: 760px; /* 가로 카메라에 맞춘 너비 */
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -89,7 +93,7 @@ header p {
 .video-container {
     position: relative;
     width: 100%;
-    aspect-ratio: 3/4;
+    aspect-ratio: 16/9;
     border-radius: 20px;
     overflow: hidden;
     margin-bottom: 24px;
@@ -106,9 +110,8 @@ video {
 
 .guide-box {
     position: absolute;
-    top: 70%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 40%; height: 33%;
+    top: 18%; left: 60%;
+    width: 38%; height: 74%;
     border: 1.5px solid rgba(121, 220, 232, 0.4);
     border-radius: 16px;
     display: flex;
@@ -116,6 +119,32 @@ video {
     justify-content: center;
     padding-bottom: 10px;
     background: linear-gradient(180deg, rgba(121,220,232,0) 0%, rgba(121,220,232,0.05) 100%);
+}
+
+/* 얼굴 가이드 (중앙 얼굴 실루엣) */
+.face-guide {
+    position: absolute;
+    top: 18%; left: 14%;
+    width: 48%; height: 74%; /* 흰 종이 인식 영역(.guide-box)과 동일 크기 */
+    pointer-events: none;
+}
+.face-guide svg {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+}
+.face-guide span {
+    position: absolute;
+    bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.72rem;
+    background: rgba(4, 16, 31, 0.6);
+    padding: 4px 10px;
+    border-radius: 20px;
 }
 
 /* 스캐너 모서리 포인트 기호 */
