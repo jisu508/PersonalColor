@@ -129,3 +129,43 @@ p { color: #666; font-size: 0.9rem; }
 
 .sub-text { font-size: 0.85rem; color: #777; margin-top: 10px; }
 .analysis-text { background: #f8f9fa; padding: 10px; border-radius: 6px; border-left: 3px solid var(--primary-color); }
+
+/* --- 웹캠 및 가이드 박스 --- */
+.video-container {
+    position: relative;
+    width: 100%;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background-color: #000;
+    margin-bottom: 15px;
+}
+
+#webcam-video {
+    width: 100%;
+    display: block;
+    transform: scaleX(-1); /* 거울 모드 (좌우 반전) */
+}
+
+.guide-box {
+    position: absolute;
+    /* 웹캠 화면 내 가이드 박스의 상대적 위치 (왼쪽 중간쯤 배치) */
+    top: 20%;
+    left: 10%;
+    width: 25%;
+    height: 50%;
+    border: 3px dashed #00FF00;
+    background: rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    pointer-events: none; /* 클릭 방해 방지 */
+}
+
+.guide-box span {
+    color: #00FF00;
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    writing-mode: vertical-rl; /* 세로 쓰기 */
+}
