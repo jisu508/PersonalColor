@@ -72,6 +72,8 @@
 
                 <div class="diagnosis-card">
                     <h2>퍼스널컬러 진단 결과</h2>
+                    <!-- 웜/쿨 판정 (백엔드 tone) — 4계절보다 이게 주 결과 -->
+                    <p class="tone-line" id="tone-line"></p>
                     <ul class="percentage-list" id="percentage-list"></ul>
                 </div>
                 
@@ -103,6 +105,6 @@
     </div>
     
     <!-- JS 파일 연동 -->
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="{{ url_for('static', filename='main.js') }}?v=3"></script>
 </body>
 </html>

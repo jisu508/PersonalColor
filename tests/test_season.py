@@ -99,9 +99,9 @@ def test_compare_methods_returns_all_methods():
 
 
 def test_hue_matches_webcam_labels():
-    """라벨이 확실한 웹캠 3장(현재 파이프라인 측정값): 웜 51.2°, 50.0° / 쿨 43.1°"""
+    """라벨이 확실한 웹캠 4장(현재 파이프라인 측정값): 웜 47.4°/48.2°, 쿨 43.1°/35.9°"""
     import numpy as np
-    for h_deg, expect in ((51.2, "warm"), (50.0, "warm"), (43.1, "cool"), (33.0, "cool")):
+    for h_deg, expect in ((47.4, "warm"), (48.2, "warm"), (43.1, "cool"), (35.9, "cool")):
         a = 10.0
         b = a * np.tan(np.radians(h_deg))
         r = diagnose_season({"skin": [65, a, b]})

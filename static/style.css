@@ -368,3 +368,12 @@ video {
 }
 
 .mt-20 { margin-top: 24px; }
+
+/* 웜/쿨 판정 한 줄 */
+.tone-line {
+    margin: 4px 0 14px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    text-align: center;
+}
+.tone-line .tone-sub { font-size: .9rem; font-weight: 400; opacity: .7; }

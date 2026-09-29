@@ -31,7 +31,7 @@ from backend.vision.paper import PaperNotFoundError, box_from_ratio, white_refer
 
 
 def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
-                 skip_white_balance: bool = False) -> dict:
+                 skip_white_balance: bool = False, return_images: bool = False) -> dict:
     """
     사진 한 장을 넣으면 진단 결과 dict 를 돌려준다.
 
@@ -40,6 +40,8 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
                 None 이면 사진에서 흰 종이를 자동으로 찾는다.
     method    : 웜/쿨 판정 방법 ("b" / "paper_d" / "smtc"). None 이면 JSON 기본값
     skip_white_balance : True 면 조명 보정 없이 진단 (수집 사진 실험용)
+    return_images : True 면 결과에 images={"corrected": 보정된 BGR 배열} 을 넣는다.
+                    (JSON 으로 못 보내는 값이라 app.py 가 꺼내서 base64 로 바꾼다)
 
     실패해도 예외를 던지지 않고 {"ok": False, "error": ..., "message": 안내문} 형태로 돌려준다.
     """
@@ -128,8 +130,11 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
             "verdict": season.warm_cool,
             "label": {"warm": "웜", "cool": "쿨", "borderline": "경계형"}[season.warm_cool]}
 
+    images = {"corrected": work} if return_images else None
+
     if reasons:   # 촬영 조건 미달 → 판정하지 않고 재촬영 안내
         return {"ok": False, "error": "retake_required", "message": reasons[0], "reasons": reasons,
+                "images": images,
                 "debug": {"tone": tone, "percentages": percentages, "colors": colors,
                           "quality": face["quality"], "lighting": lighting_info,
                           "cheek_delta_e": round(cheek_de, 1) if cheek_de is not None else None}}
@@ -137,6 +142,7 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
     return {
         "ok": True,
         "tone": tone,
+        "images": images,
         # 화면 표시용
         "percentages": percentages,
         "best_group": season_label(season.top, ref),
