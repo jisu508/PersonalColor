@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>근거를 보여주는 AI 퍼스널컬러 진단</title>
+    
+    <!-- 폰트 적용 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 분리된 외부 CSS 파일 연결 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -21,7 +28,7 @@
             <div class="video-container">
                 <video id="webcam-video" autoplay playsinline></video>
                 <div id="guide-box" class="guide-box">
-                    <span>흰 종이 위치</span>
+                    <span>흰 종이 인식 영역</span>
                 </div>
             </div>
             
@@ -32,10 +39,11 @@
         <!-- 로딩 화면 -->
         <section id="loading-section" class="card hidden">
             <div class="spinner"></div>
-            <p>조명 보정 및 피부/색상을 추출 중입니다...</p>
+            <h2>분석 중입니다</h2>
+            <p>조명 보정 및 피부 톤/색상을 추출하고 있습니다...</p>
         </section>
 
-        <!-- 결과 화면 (새로운 모바일 앱 스타일로 교체됨) -->
+        <!-- 결과 화면 -->
         <section id="result-section" class="hidden result-container">
             <div class="result-header-bg">
                 <div class="profile-reliability">
@@ -46,19 +54,19 @@
                     </div>
                 </div>
 
-                <div class="card diagnosis-card">
+                <div class="diagnosis-card">
                     <h2>퍼스널컬러 진단 결과</h2>
                     <ul class="percentage-list" id="percentage-list"></ul>
                 </div>
                 
                 <div class="best-color-card" id="best-color-card">
-                    <p class="best-title">Best Color Card</p>
+                    <p class="best-title">Best Season</p>
                     <h2 class="best-season" id="best-season-name">분석 중</h2>
                 </div>
             </div>
 
             <!-- 조명 자동 보정 검증 -->
-            <div class="card correction-card mt-20">
+            <div class="card correction-card">
                 <h2>조명 보정 (White Balancing)</h2>
                 <div class="image-comparison">
                     <div class="img-box">
@@ -78,6 +86,7 @@
         </section>
     </div>
     
+    <!-- JS 파일 연동 -->
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>

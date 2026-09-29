@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const formData = new FormData();
                     formData.append('image', blob, 'capture.jpg');
                     
-                    const boxCoords = { x: 0.10, y: 0.20, width: 0.25, height: 0.50 };
+                    const boxCoords = getGuideCoords();
                     formData.append('coords', JSON.stringify(boxCoords));
 
                     const response = await fetch('/api/diagnose', { method: 'POST', body: formData });
@@ -66,6 +66,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             handleError(error); // 외부 에러 발생 시 처리
         }
     });
+
+    // 가이드 박스가 실제 영상(object-fit: cover)의 어느 부분인지 0~1 비율로 계산
+    function getGuideCoords() {
+        const container = video.parentElement.getBoundingClientRect();
+        const guide = document.getElementById('guide-box').getBoundingClientRect();
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const scale = Math.max(container.width / vw, container.height / vh);
+        const dw = vw * scale, dh = vh * scale;
+        const offX = (container.width - dw) / 2, offY = (container.height - dh) / 2;
+        const clamp = v => Math.max(0, Math.min(1, v));
+        const x = clamp((guide.left - container.left - offX) / dw);
+        const y = clamp((guide.top - container.top - offY) / dh);
+        const w = Math.min(1 - x, guide.width / dw);
+        const h = Math.min(1 - y, guide.height / dh);
+        return { x, y, width: w, height: h };
+    }
 
     // 3. 에러 발생 시 로딩 화면 끄고 복귀하는 함수 (무한 로딩 방지)
     function handleError(error) {
@@ -97,14 +113,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             const li = document.createElement('li');
             li.className = 'percentage-item';
             li.innerHTML = `
-                <div class="season-name-wrapper">
-                    <span class="color-dot" style="background-color: ${item.color};"></span>
-                    <span>${item.name}</span>
+                <div class="percentage-head">
+                    <div class="season-name-wrapper">
+                        <span class="color-dot" style="background-color: ${item.color};"></span>
+                        <span>${item.name}</span>
+                    </div>
+                    <span class="percentage-value">${item.value}%</span>
                 </div>
-                <span>${item.value}%</span>
+                <div class="bar-track">
+                    <div class="bar-fill" style="background-color: ${item.color};" data-value="${item.value}"></div>
+                </div>
             `;
             listContainer.appendChild(li);
         });
+
+        // 바 애니메이션 (0% -> 값)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            listContainer.querySelectorAll('.bar-fill').forEach(bar => {
+                bar.style.width = Math.max(0, Math.min(100, bar.dataset.value)) + '%';
+            });
+        }));
 
         document.getElementById('best-season-name').textContent = data.best_group;
         document.getElementById('img-original').src = imageUrl;
