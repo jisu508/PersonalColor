@@ -97,29 +97,48 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
     warnings += fc.warnings
     colors = {"skin": face["skin"], "eye": face["eye"], "hair": face["hair"]}
 
-    # ── ③-1  촬영 조건 점검 (못 맞추면 판정 대신 재촬영 안내) ─────
+    # ── ③-1  촬영 조건 점검 ──────────────────────────────────
+    #   reasons(막음)  : 이 상태로는 판정 자체가 의미 없다 → 재촬영 안내
+    #   soft(경고만)   : 판정은 하되 신뢰도를 깎고 "이래서 덜 정확할 수 있다" 고 알려준다
     gate = ref.get("quality_gate", {})
-    reasons = []
+    reasons: list[str] = []
+    soft: list[str] = []
+
     if gate.get("require_white_balance") and lighting_info is None and not skip_white_balance:
         reasons.append("흰 종이 조명 보정을 하지 못했습니다. 흰 종이가 화면에 잘 보이게 촬영해주세요.")
+
     cl, cr = face["regions"]["cheek_left"]["lab"], face["regions"]["cheek_right"]["lab"]
     cheek_de = delta_e(cl, cr) if (cl and cr) else None
-    if cheek_de is not None and cheek_de > gate.get("max_cheek_delta_e", 99):
-        reasons.append(f"얼굴 좌우 밝기·색 차이가 큽니다 (ΔE {cheek_de:.1f}). 조명을 정면으로 받는 자리에서 촬영해주세요.")
+    if cheek_de is not None:
+        if cheek_de > gate.get("block_cheek_delta_e", 99):
+            reasons.append(f"얼굴 좌우 밝기·색 차이가 너무 큽니다 (ΔE {cheek_de:.1f}). "
+                           "한쪽에서만 빛을 받고 있어요. 정면 조명으로 다시 촬영해주세요.")
+        elif cheek_de > gate.get("warn_cheek_delta_e", 99):
+            soft.append(f"얼굴 좌우 색 차이가 있습니다 (ΔE {cheek_de:.1f}). 정면 조명이면 더 정확해집니다.")
+
     if lighting_info:
         paper = lighting_info.get("paper", {})
         blown = 1.0 - paper["clean_ratio"] if "clean_ratio" in paper else lighting_info["paper_clip_ratio"]
-        if blown > gate.get("max_paper_clip_ratio", 1.0):
-            reasons.append(f"흰 종이가 하얗게 날아갔습니다 ({blown:.0%}). 종이에 조명이 직접 닿지 않게 해주세요.")
-    if face["quality"]["face_width_ratio"] < gate.get("min_face_width_ratio", 0):
-        reasons.append(f"얼굴이 작게 찍혔습니다 (사진 폭의 {face['quality']['face_width_ratio']:.0%}). 조금 더 가까이서 촬영해주세요.")
+        if blown > gate.get("block_paper_clip_ratio", 1.0):
+            reasons.append(f"흰 종이가 대부분 하얗게 날아갔습니다 ({blown:.0%}). "
+                           "종이에 조명이 직접 닿지 않게 각도를 바꿔주세요.")
+        elif blown > gate.get("warn_paper_clip_ratio", 1.0):
+            soft.append(f"흰 종이에 반사光이 있습니다 ({blown:.0%} 포화). 반사되지 않은 부분만으로 보정했습니다.")
+
+    fw = face["quality"]["face_width_ratio"]
+    if fw < gate.get("block_face_width_ratio", 0):
+        reasons.append(f"얼굴이 너무 작게 찍혔습니다 (사진 폭의 {fw:.0%}). 더 가까이서 촬영해주세요.")
+    elif fw < gate.get("warn_face_width_ratio", 0):
+        soft.append(f"얼굴이 작게 찍혔습니다 (사진 폭의 {fw:.0%}). 가까이서 찍으면 더 정확해집니다.")
+
+    warnings += soft
 
     # ── ④  시즌 퍼센티지 ─────────────────────────────────────
     season = diagnose_season(colors, ref=ref, method=method)
 
     # ── ⑤  신뢰도 ────────────────────────────────────────────
     conf = compute_confidence(quality=face["quality"], lighting=lighting_info,
-                              season_gap=season.gap, colors=colors)
+                              season_gap=season.gap, colors=colors, gate_warnings=soft)
 
     # ── 결과 정리 (웹 화면이 바로 쓰는 형태 + 디버그용 원본 숫자) ──
     percentages = [{"key": k, "name": season_label(k, ref), "value": round(v, 1), "color": season_color(k, ref)}

@@ -130,13 +130,15 @@
     "_필수": "WB 없이 판정하면 같은 사람도 9.7° 흔들린다"
   },
   "quality_gate": {
-    "_설명": "이 조건을 못 맞추면 판정 대신 재촬영을 안내한다",
+    "_설명": "두 단계로 나눈다. block_* 을 넘으면 판정하지 않고 재촬영을 안내하고, warn_* 을 넘으면 판정은 하되 신뢰도를 깎고 경고를 붙인다.",
     "require_white_balance": true,
-    "max_cheek_delta_e": 8.0,
-    "_max_cheek_delta_e_근거": "측면광이면 한쪽 볼이 판정을 끌고 간다",
-    "max_paper_clip_ratio": 0.1,
-    "_max_paper_clip_ratio_근거": "종이가 포화되면 WB 기준으로 쓸 수 없다",
-    "min_face_width_ratio": 0.15,
-    "_min_face_width_ratio_근거": "얼굴이 작으면 볼 픽셀이 부족하다"
+    "warn_cheek_delta_e": 8.0,
+    "block_cheek_delta_e": 15.0,
+    "_cheek_근거": "측면광이면 한쪽 볼이 판정을 끌고 간다. 다만 실내 조명에서 ΔE 8~15 는 흔해서 막지 않고 경고만 한다 (웹캠 9장 중 4장이 이 구간이었다)",
+    "warn_paper_clip_ratio": 0.15,
+    "block_paper_clip_ratio": 0.45,
+    "_paper_근거": "종이에 반사광이 있어도 포화되지 않은 화소가 절반 이상이면 기준색을 뽑을 수 있다. 0.10 은 너무 빡빡해서 정상 촬영도 막혔다",
+    "warn_face_width_ratio": 0.15,
+    "block_face_width_ratio": 0.1
   }
 }

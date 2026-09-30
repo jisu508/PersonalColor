@@ -85,6 +85,18 @@ def test_borderline_has_small_gap():
     assert near < far
 
 
+def test_top_season_always_from_winning_side():
+    """웜 52% 처럼 애매할 때도 1위 시즌은 이긴 쪽에서 나와야 한다"""
+    import numpy as np
+    for h_deg in (35, 42, 44.5, 45, 45.5, 47, 50, 60):
+        for L, C in ((45, 10), (65, 18), (80, 30)):
+            a = 10.0
+            b = a * np.tan(np.radians(h_deg))
+            r = diagnose_season({"skin": [L, a, b]})
+            side = "warm" if r.warm_percent >= 50 else "cool"
+            assert r.top.endswith(side), (h_deg, L, C, r.top, r.warm_percent)
+
+
 def test_top_season_matches_warm_percent():
     """웜 확률이 50%가 넘으면 1위 시즌도 웜 쪽이어야 한다 (앞뒤가 맞아야 함)"""
     for skin in ([65, 25.6, 23.5], [65, 10.4, 14.1], [65, 13.9, 17.1], [70, 8, 25], [70, 20, 8]):

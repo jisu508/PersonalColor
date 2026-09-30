@@ -194,10 +194,18 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
 
     # 2) 같은 쪽 안에서 밝기·채도로 두 계절을 나눈다
     #    (봄 vs 가을 / 여름 vs 겨울)
+    #    진 쪽은 안에서 더 나누지 않고 반반으로 둔다.
+    #    (밝기·채도 축은 아직 데이터로 검증하지 않았다. 진 쪽 안에서 어느 계절인지는
+    #     의미가 없는데, 그걸 갈라놓으면 "웜 62% 인데 1위는 여름 쿨" 같은 모순이 생긴다)
     temp = max(1e-6, ref.get("softmax_temperature", 1.2))
+    win_side = 1 if p_warm >= 0.5 else -1
     seasons: dict[str, float] = {}
     for side, side_p in ((1, p_warm), (-1, p_cool)):
         keys = [k for k, sv in ref["seasons"].items() if sv["warm"] == side]
+        if side != win_side:                       # 진 쪽 → 반반
+            for k in keys:
+                seasons[k] = float(side_p * 100.0 / len(keys))
+            continue
         d = []
         for k in keys:
             sv = ref["seasons"][k]
@@ -208,9 +216,13 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
         for k, ww in zip(keys, w):
             seasons[k] = float(side_p * ww * 100.0)
 
+    # 1위 시즌은 반드시 '이긴 쪽'에서 고른다
+    win_keys = [k for k in seasons if ref["seasons"][k]["warm"] == win_side]
+    top = max(win_keys, key=lambda k: seasons[k])
     names = list(seasons)
     p = np.array([seasons[k] for k in names])
     order = np.argsort(-p)
+    runner_up = next(k for k in (names[i] for i in order) if k != top)
     detail.update({"skin_L": round(L, 1), "skin_C": round(C, 1),
                    "axis": {"warm": round(float(v_warm), 2), "light": round(float(v_light), 2),
                             "chroma": round(float(v_chroma), 2)},
@@ -225,8 +237,8 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
     else:
         verdict = "warm" if warm > 0 else "cool"
 
-    return SeasonResult(seasons=seasons, top=names[order[0]], runner_up=names[order[1]],
-                        gap=float(p[order[0]] - p[order[1]]), warm_score=float(warm),
+    return SeasonResult(seasons=seasons, top=top, runner_up=runner_up,
+                        gap=float(abs(seasons[top] - seasons[runner_up])), warm_score=float(warm),
                         warm_cool=verdict, warm_percent=p_warm * 100.0,
                         method=method, detail=detail)
 

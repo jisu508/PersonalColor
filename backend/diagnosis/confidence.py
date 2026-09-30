@@ -26,6 +26,8 @@ PENALTY = {
     "lighting_warning_max": 30,
     "face_warning": 5,       # 얼굴 추출 경고 1건당 (최대 15)
     "face_warning_max": 15,
+    "gate_warning": 12,        # 촬영 조건 경고 하나당 (막지는 않은 것)
+    "gate_warning_max": 30,
     "hair_missing": 5,
     "eye_missing": 5,
     "unclear_10": 20,        # 1·2위 격차 10%p 미만
@@ -47,12 +49,14 @@ class ConfidenceResult:
 
 
 def compute_confidence(quality: dict, lighting: dict | None = None,
-                       season_gap: float | None = None, colors: dict | None = None) -> ConfidenceResult:
+                       season_gap: float | None = None, colors: dict | None = None,
+                       gate_warnings: list[str] | None = None) -> ConfidenceResult:
     """
     quality    : face_color 결과의 quality 부분 (brightness, sharpness, face_width_ratio, asymmetry)
     lighting   : white_balance 결과의 to_dict() (warnings 등). 없으면 생략
     season_gap : 1위 - 2위 퍼센티지 차이
     colors     : {"skin":..., "eye":..., "hair":...} — 빠진 부위가 있으면 조금 감점
+    gate_warnings : 촬영 조건 경고(막지는 않은 것들). 하나당 감점
     """
     score = 100
     reasons = []
@@ -75,6 +79,10 @@ def compute_confidence(quality: dict, lighting: dict | None = None,
         if n:
             cut = min(n * PENALTY["lighting_warning"], PENALTY["lighting_warning_max"])
             score -= cut; reasons.append(f"조명 보정 경고 {n}건")
+
+    if gate_warnings:
+        cut = min(len(gate_warnings) * PENALTY["gate_warning"], PENALTY["gate_warning_max"])
+        score -= cut; reasons.append(f"촬영 조건 경고 {len(gate_warnings)}건")
 
     if colors:
         if colors.get("hair") is None:
