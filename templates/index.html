@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     
     <!-- 분리된 외부 CSS 파일 연결 -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
 </head>
 <body>
     <div class="app-container">
@@ -93,6 +93,16 @@
                         <span class="badge">보정 후</span>
                         <img id="img-corrected" src="" alt="보정된 사진">
                     </div>
+                </div>
+            </div>
+
+            <!-- 진단 결과별 시즌 가이드 사진 (main.js에서 결과에 따라 채워짐) -->
+            <div class="card season-guide-card" id="season-guide-card">
+                <h2 id="season-guide-title">시즌 컬러 가이드</h2>
+                <div class="season-guide-images">
+                    <img id="season-guide-style" src="" alt="시즌 스타일 가이드">
+                    <img id="season-guide-makeup" src="" alt="시즌 화장품 가이드">
+                    <img id="season-guide-clothes" src="" alt="시즌 의류 가이드">
                 </div>
             </div>
 

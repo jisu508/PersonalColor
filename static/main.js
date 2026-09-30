@@ -10,6 +10,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let stream = null;
 
+    // 시즌별 가이드 이미지 (static/images/ 폴더에 넣어두세요)
+    const SEASON_IMAGES = {
+        '봄':   { style: '최종_봄.png',   makeup: '봄_화장품.png', clothes: '여름_코디.png',  title: '봄 웜톤 가이드' },
+        '여름': { style: '최종_여름.png', makeup: '여름_화장품.png', clothes: '여름_코디.png', title: '여름 쿨톤 가이드' },
+        '가을': { style: '최종_가을.png', makeup: '가을_화장품.png', clothes: '가을_코디.png', title: '가을 웜톤 가이드' },
+        '겨울': { style: '최종_겨울.png', makeup: '겨울_화장품.png', clothes: '여름_코디.png', title: '겨울 쿨톤 가이드' }
+    };
+
+    function renderSeasonGuide(bestGroup) {
+        const card = document.getElementById('season-guide-card');
+        const key = Object.keys(SEASON_IMAGES).find(k => String(bestGroup).includes(k));
+        if (!key) { card.classList.add('hidden'); return; }
+        const info = SEASON_IMAGES[key];
+        const base = '/static/images/';
+        document.getElementById('season-guide-title').textContent = info.title;
+        document.getElementById('season-guide-style').src = base + encodeURIComponent(info.style);
+        document.getElementById('season-guide-makeup').src = base + encodeURIComponent(info.makeup);
+        document.getElementById('season-guide-clothes').src = base + encodeURIComponent(info.clothes);
+        card.classList.remove('hidden');
+    }
+
     // 1. 웹캠 켜기
     try {
         stream = await navigator.mediaDevices.getUserMedia({ 
@@ -135,6 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }));
 
         document.getElementById('best-season-name').textContent = data.best_group;
+        renderSeasonGuide(data.best_group);
         document.getElementById('img-original').src = imageUrl;
         document.getElementById('img-corrected').src = imageUrl; 
         document.getElementById('img-corrected').style.filter = "contrast(1.1) brightness(1.05)";
