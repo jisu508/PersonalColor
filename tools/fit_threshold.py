@@ -41,8 +41,8 @@ from backend.image_io import imread                                    # noqa: E
 from backend.pipeline import run_pipeline                              # noqa: E402
 
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-METHODS = ["bc", "b", "paper_d", "smtc"]
-RAW = {"bc": lambda d: d.get("D_bc"), "b": lambda d: d.get("skin_b"), "paper_d": lambda d: d.get("D"),
+METHODS = ["bc", "hue", "b", "paper_d", "smtc"]
+RAW = {"bc": lambda d: d.get("D_bc"), "hue": lambda d: d.get("hue_deg"), "b": lambda d: d.get("skin_b"), "paper_d": lambda d: d.get("D"),
        "smtc": lambda d: (d.get("cool_distance", 0) - d.get("warm_distance", 0))}
 
 
@@ -82,6 +82,10 @@ def main():
     ap.add_argument("folder")
     ap.add_argument("--no-wb", action="store_true", help="조명 보정 생략 (흰 종이 없는 사진)")
     ap.add_argument("--out", default=None, help="사진별 측정값 CSV 저장 경로")
+    ap.add_argument("--ignore-gate", action="store_true",
+                    help="촬영 조건 미달 사진도 계산에 포함 (기준선 잡을 땐 보통 켜는 게 낫다)")
+    ap.add_argument("--write", action="store_true",
+                    help="찾은 색상각 기준선을 season_reference.json 에 실제로 써넣는다")
     args = ap.parse_args()
 
     root = Path(args.folder)
@@ -97,6 +101,9 @@ def main():
         row = {"file": str(path.relative_to(root)), "label": label or ""}
         try:
             r = run_pipeline(imread(path), skip_white_balance=args.no_wb)
+            if not r["ok"] and args.ignore_gate and (r.get("debug") or {}).get("colors"):
+                # 촬영 조건 미달이어도 색은 뽑혔다 → 기준선 계산에는 쓴다
+                r = {**r, "ok": True, **r["debug"], "top": "-", "reliability": 0}
             if not r["ok"]:
                 row["error"] = r["message"]
             else:
@@ -123,7 +130,7 @@ def main():
         print("라벨 붙은 사진이 너무 적어 경계값을 찾을 수 없습니다. (최소 4장, 권장 20장 이상)")
     else:
         print(f"\n{'방법':<10}{'경계값':>10}{'정확도':>9}{'웜 정확도':>11}{'쿨 정확도':>11}   설명")
-        desc = {"bc": "b - C (현재 기본값)", "b": "피부 b값만", "paper_d": "논문① 판별식 D",
+        desc = {"bc": "b - C (현재 기본값)", "hue": "색상각 h", "b": "피부 b값만", "paper_d": "논문① 판별식 D",
                 "smtc": "논문③·ShowMeTheColor"}
         for m in METHODS:
             vals = [r.get(m) for r in ok]
@@ -138,6 +145,44 @@ def main():
             if v:
                 print(f"  {lab:<5} n={len(v):3d}   b 평균 {np.mean(v):6.2f}   표준편차 {np.std(v):5.2f}   범위 {min(v):.1f} ~ {max(v):.1f}")
         print("\n※ 정확도가 60% 아래면 그 방법은 이 사진들에서 웜/쿨을 못 가르는 것입니다.")
+
+        if args.write:
+            _write_hue_threshold(ok)
+
+
+def _write_hue_threshold(ok):
+    """찾은 색상각 기준선을 season_reference.json 에 실제로 써넣는다"""
+    import json
+    from datetime import date
+    vals = [r.get("hue") for r in ok]
+    labels = [r["label"] for r in ok]
+    if any(v is None for v in vals):
+        print("\n[--write] 색상각을 못 구한 사진이 있어 쓰지 않았습니다.")
+        return
+    t, acc, wa, ca = best_threshold(vals, labels)
+    warm_v = [v for v, l in zip(vals, labels) if l == "warm"]
+    cool_v = [v for v, l in zip(vals, labels) if l == "cool"]
+    margin = min(warm_v) - max(cool_v)          # 웜 최저와 쿨 최고 사이 간격
+    band = round(max(0.5, min(4.0, margin / 3)), 1) if margin > 0 else 1.0
+
+    path = ROOT / "data/reference/season_reference.json"
+    d = json.loads(path.read_text(encoding="utf-8"))
+    h = d["warm_cool"]["hue"]
+    before = (h["threshold"], h["borderline_band"])
+    h["threshold"] = round(float(t), 1)
+    h["borderline_band"] = band
+    h["_판정"] = f"h > {t + band:.1f}° 웜 / {t - band:.1f}~{t + band:.1f}° 경계형 / h < {t - band:.1f}° 쿨"
+    h["_기준선_근거"] = (f"{date.today()} tools/fit_threshold.py --write 로 재산출. "
+                         f"라벨 {len(ok)}장(웜 {len(warm_v)}/쿨 {len(cool_v)}) 정확도 {acc:.0%}. "
+                         f"웜 최저 {min(warm_v):.1f}° / 쿨 최고 {max(cool_v):.1f}° → 간격 {margin:.1f}°")
+    d.setdefault("_검증기록", []).append(
+        {"날짜": str(date.today()), "기준선": h["threshold"], "경계폭": band,
+         "표본": f"웜 {len(warm_v)} / 쿨 {len(cool_v)}", "정확도": f"{acc:.0%}"})
+    path.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n[--write] 색상각 기준선 {before[0]}° → {h['threshold']}° , 경계폭 {before[1]}° → {band}° 로 저장했습니다.")
+    print(f"          정확도 {acc:.0%} (웜 {wa:.0%} / 쿨 {ca:.0%})")
+    if margin <= 0:
+        print("          ※ 웜과 쿨 범위가 겹칩니다. 이 카메라·조명으로는 색상각만으로 완전히 가를 수 없습니다.")
         print("※ 쓸 방법을 정했으면 data/reference/season_reference.json 의 threshold 를 위 경계값으로 바꾸세요.")
 
     if args.out:

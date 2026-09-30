@@ -19,16 +19,19 @@ from __future__ import annotations
 
 import numpy as np
 
+import numpy as np
+
+from backend.color_utils import delta_e
 from backend.diagnosis.confidence import compute_confidence
 from backend.diagnosis.season import diagnose_season, load_reference, season_color, season_label
 from backend.vision.face_color import extract_face_colors
 from backend.vision.landmarks import FaceNotFoundError
 from backend.vision.lighting import white_balance
-from backend.vision.paper import PaperNotFoundError, box_from_ratio, find_white_paper
+from backend.vision.paper import PaperNotFoundError, box_from_ratio, white_reference
 
 
 def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
-                 skip_white_balance: bool = False) -> dict:
+                 skip_white_balance: bool = False, return_images: bool = False) -> dict:
     """
     사진 한 장을 넣으면 진단 결과 dict 를 돌려준다.
 
@@ -37,6 +40,8 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
                 None 이면 사진에서 흰 종이를 자동으로 찾는다.
     method    : 웜/쿨 판정 방법 ("b" / "paper_d" / "smtc"). None 이면 JSON 기본값
     skip_white_balance : True 면 조명 보정 없이 진단 (수집 사진 실험용)
+    return_images : True 면 결과에 images={"corrected": 보정된 BGR 배열} 을 넣는다.
+                    (JSON 으로 못 보내는 값이라 app.py 가 꺼내서 base64 로 바꾼다)
 
     실패해도 예외를 던지지 않고 {"ok": False, "error": ..., "message": 안내문} 형태로 돌려준다.
     """
@@ -48,11 +53,22 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
     work = img_bgr
     if not skip_white_balance:
         try:
-            box = box_from_ratio(img_bgr, guide_box) if guide_box is not None else find_white_paper(img_bgr)
-            wb = white_balance(img_bgr, box)
+            wbcfg = ref.get("white_balance", {})
+            # 기준물 자체가 중성이 아니면(예: 형광증백제 종이) 그 치우침만큼 목표색을 옮긴다
+            tint = np.asarray(wbcfg.get("reference_tint", [1.0, 1.0, 1.0]), np.float32)
+            target = float(wbcfg.get("target", 255.0)) * tint
+            if guide_box is not None:
+                box = box_from_ratio(img_bgr, guide_box)
+                wb = white_balance(img_bgr, box, target=target)
+                paper_info = {"mode": "guide_box", "box": list(box)}
+            else:
+                # 종이 전체에서 포화·그림자를 뺀 평균색을 기준으로 (사람이 깨끗한 곳 찍던 것과 같은 효과)
+                ref_bgr, paper_info = white_reference(img_bgr)
+                paper_info["mode"] = "auto"
+                wb = white_balance(img_bgr, target=target, reference_bgr=ref_bgr)
             work = wb.image
             lighting_info = wb.to_dict()
-            lighting_info["box"] = list(box)
+            lighting_info["paper"] = paper_info
             warnings += wb.warnings
         except PaperNotFoundError as e:
             return {"ok": False, "error": "paper_not_found", "message": str(e)}
@@ -84,18 +100,71 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
     warnings += fc.warnings
     colors = {"skin": face["skin"], "eye": face["eye"], "hair": face["hair"]}
 
+    # ── ③-1  촬영 조건 점검 ──────────────────────────────────
+    #   reasons(막음)  : 이 상태로는 판정 자체가 의미 없다 → 재촬영 안내
+    #   soft(경고만)   : 판정은 하되 신뢰도를 깎고 "이래서 덜 정확할 수 있다" 고 알려준다
+    gate = ref.get("quality_gate", {})
+    reasons: list[str] = []
+    soft: list[str] = []
+
+    if gate.get("require_white_balance") and lighting_info is None and not skip_white_balance:
+        reasons.append("흰 종이 조명 보정을 하지 못했습니다. 흰 종이가 화면에 잘 보이게 촬영해주세요.")
+
+    cl, cr = face["regions"]["cheek_left"]["lab"], face["regions"]["cheek_right"]["lab"]
+    cheek_de = delta_e(cl, cr) if (cl and cr) else None
+    if cheek_de is not None:
+        if cheek_de > gate.get("block_cheek_delta_e", 99):
+            reasons.append(f"얼굴 좌우 밝기·색 차이가 너무 큽니다 (ΔE {cheek_de:.1f}). "
+                           "한쪽에서만 빛을 받고 있어요. 정면 조명으로 다시 촬영해주세요.")
+        elif cheek_de > gate.get("warn_cheek_delta_e", 99):
+            soft.append(f"얼굴 좌우 색 차이가 있습니다 (ΔE {cheek_de:.1f}). 정면 조명이면 더 정확해집니다.")
+
+    if lighting_info:
+        paper = lighting_info.get("paper", {})
+        blown = 1.0 - paper["clean_ratio"] if "clean_ratio" in paper else lighting_info["paper_clip_ratio"]
+        if blown > gate.get("block_paper_clip_ratio", 1.0):
+            reasons.append(f"흰 종이가 대부분 하얗게 날아갔습니다 ({blown:.0%}). "
+                           "종이에 조명이 직접 닿지 않게 각도를 바꿔주세요.")
+        elif blown > gate.get("warn_paper_clip_ratio", 1.0):
+            soft.append(f"흰 종이에 반사光이 있습니다 ({blown:.0%} 포화). 반사되지 않은 부분만으로 보정했습니다.")
+
+    fw = face["quality"]["face_width_ratio"]
+    if fw < gate.get("block_face_width_ratio", 0):
+        reasons.append(f"얼굴이 너무 작게 찍혔습니다 (사진 폭의 {fw:.0%}). 더 가까이서 촬영해주세요.")
+    elif fw < gate.get("warn_face_width_ratio", 0):
+        soft.append(f"얼굴이 작게 찍혔습니다 (사진 폭의 {fw:.0%}). 가까이서 찍으면 더 정확해집니다.")
+
+    warnings += soft
+
     # ── ④  시즌 퍼센티지 ─────────────────────────────────────
     season = diagnose_season(colors, ref=ref, method=method)
 
     # ── ⑤  신뢰도 ────────────────────────────────────────────
     conf = compute_confidence(quality=face["quality"], lighting=lighting_info,
-                              season_gap=season.gap, colors=colors)
+                              season_gap=season.gap, colors=colors, gate_warnings=soft)
 
     # ── 결과 정리 (웹 화면이 바로 쓰는 형태 + 디버그용 원본 숫자) ──
     percentages = [{"key": k, "name": season_label(k, ref), "value": round(v, 1), "color": season_color(k, ref)}
                    for k, v in sorted(season.seasons.items(), key=lambda kv: -kv[1])]
+
+    warm_pct = round(season.warm_percent, 1)
+    tone = {"warm": round(warm_pct, 1), "cool": round(100 - warm_pct, 1),
+            "verdict": season.warm_cool,
+            "label": {"warm": "웜", "cool": "쿨", "borderline": "경계형"}[season.warm_cool]}
+
+    images = {"corrected": work} if return_images else None
+
+    if reasons:   # 촬영 조건 미달 → 판정하지 않고 재촬영 안내
+        return {"ok": False, "error": "retake_required", "message": reasons[0], "reasons": reasons,
+                "images": images,
+                "debug": {"tone": tone, "percentages": percentages, "colors": colors,
+                          "quality": face["quality"], "lighting": lighting_info,
+                          "cheek_delta_e": round(cheek_de, 1) if cheek_de is not None else None}}
+
     return {
         "ok": True,
+        "tone": tone,
+        "images": images,
         # 화면 표시용
         "percentages": percentages,
         "best_group": season_label(season.top, ref),
@@ -112,12 +181,16 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
         "quality": face["quality"],
         "lighting": lighting_info,
         "season_detail": season.to_dict()["detail"],
+        "cheek_delta_e": round(cheek_de, 1) if cheek_de is not None else None,
         "method": season.method,
     }
 
 
 def _interpret(season) -> str:
     """경계 케이스 해석 문구 (개발계획서 부가기능 ⑥)"""
+    if season.warm_cool == "borderline":
+        return (f"웜 {season.warm_percent:.0f}% / 쿨 {100 - season.warm_percent:.0f}% — 경계형입니다. "
+                "양쪽 색을 모두 활용할 수 있습니다.")
     if season.gap >= 40:
         from backend.diagnosis.season import season_label
         return f"전형적인 {season_label(season.top)} 유형입니다."

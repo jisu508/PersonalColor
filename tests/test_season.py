@@ -80,12 +80,55 @@ def test_borderline_has_small_gap():
     """경계에 있는 사람은 1·2위 격차가 작아야 한다(= 퍼센티지로 보여줄 값)"""
     ref = load_reference()
     t = ref["warm_cool"]["b"]["threshold"]
-    assert diagnose_season({"skin": [65, 12, t]}).gap < diagnose_season({"skin": [65, 12, t + 8]}).gap
+    near = diagnose_season({"skin": [65, 12, t]}, method="b").gap
+    far = diagnose_season({"skin": [65, 12, t + 8]}, method="b").gap
+    assert near < far
 
 
-def test_compare_methods_returns_all_four():
+def test_top_season_always_from_winning_side():
+    """웜 52% 처럼 애매할 때도 1위 시즌은 이긴 쪽에서 나와야 한다"""
+    import numpy as np
+    for h_deg in (35, 42, 44.5, 45, 45.5, 47, 50, 60):
+        for L, C in ((45, 10), (65, 18), (80, 30)):
+            a = 10.0
+            b = a * np.tan(np.radians(h_deg))
+            r = diagnose_season({"skin": [L, a, b]})
+            side = "warm" if r.warm_percent >= 50 else "cool"
+            assert r.top.endswith(side), (h_deg, L, C, r.top, r.warm_percent)
+
+
+def test_top_season_matches_warm_percent():
+    """웜 확률이 50%가 넘으면 1위 시즌도 웜 쪽이어야 한다 (앞뒤가 맞아야 함)"""
+    for skin in ([65, 25.6, 23.5], [65, 10.4, 14.1], [65, 13.9, 17.1], [70, 8, 25], [70, 20, 8]):
+        r = diagnose_season({"skin": skin})
+        side = "warm" if r.warm_percent >= 50 else "cool"
+        assert r.top.endswith(side), (skin, r.top, r.warm_percent)
+
+
+def test_compare_methods_returns_all_methods():
     out = compare_methods(WARM)
-    assert set(out) == {"bc", "b", "paper_d", "smtc"}
+    assert set(out) == {"bc", "hue", "b", "paper_d", "smtc"}
+
+
+def test_hue_classifies_by_configured_threshold():
+    """설정된 기준선을 기준으로 위면 웜, 아래면 쿨로 갈려야 한다 (기준선 값 자체는 보정 대상)"""
+    import numpy as np
+    ref = load_reference()["warm_cool"]["hue"]
+    t, band = ref["threshold"], ref["borderline_band"]
+    for h_deg, expect in ((t + band + 3, "warm"), (t - band - 3, "cool")):
+        a = 10.0
+        b = a * np.tan(np.radians(h_deg))
+        r = diagnose_season({"skin": [65, a, b]})
+        assert r.warm_cool == expect, (h_deg, r.warm_cool, r.warm_percent)
+
+
+def test_borderline_band_marks_middle():
+    """기준선 부근(±band)은 웜/쿨을 단정하지 않고 '경계형' 으로 표시한다"""
+    import numpy as np
+    ref = load_reference()["warm_cool"]["hue"]
+    a = 10.0
+    b = a * np.tan(np.radians(ref["threshold"]))
+    assert diagnose_season({"skin": [65, a, b]}).warm_cool == "borderline"
 
 
 def test_bc_method_runs_and_is_negative():
@@ -96,9 +139,9 @@ def test_bc_method_runs_and_is_negative():
         assert detail["D_bc"] <= 0
 
 
-def test_default_method_is_b():
-    """현재 기본 판정 방법은 b (연예인 사진 27장 검증 85%)"""
-    assert load_reference()["warm_cool"]["method"] == "b"
+def test_default_method_is_hue():  # noqa: D401
+    """현재 기본 판정 방법은 색상각 hue (팀 결정)"""
+    assert load_reference()["warm_cool"]["method"] == "hue"
 
 
 def test_missing_skin_raises():

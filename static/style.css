@@ -366,6 +366,7 @@ video {
 }
 
 .mt-20 { margin-top: 24px; }
+
 /* 시즌 가이드 사진 (추가) */
 .season-guide-card { padding: 24px; }
 .season-guide-images { display: flex; flex-direction: column; gap: 16px; }
@@ -377,3 +378,14 @@ video {
     border: 1px solid rgba(4,16,31,0.1);
     background: #fff;
 }
+
+
+/* 웜/쿨 판정 한 줄 */
+.tone-line {
+    margin: 4px 0 14px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    text-align: center;
+}
+.tone-line .tone-sub { font-size: .9rem; font-weight: 400; opacity: .7; }
+

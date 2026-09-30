@@ -50,6 +50,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             return; 
         }
 
+        // 가이드 박스 좌표는 화면을 숨기기 '전에' 재야 한다.
+        // 숨긴 요소는 크기가 0 이라 계산이 NaN 이 되고, JSON 으로는 null 이 되어 서버가 오류를 낸다.
+        const boxCoords = getGuideCoords();
+
         webcamSection.classList.add('hidden');
         loadingSection.classList.remove('hidden');
 
@@ -69,13 +73,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const formData = new FormData();
                     formData.append('image', blob, 'capture.jpg');
                     
-                    const boxCoords = getGuideCoords();
-                    formData.append('coords', JSON.stringify(boxCoords));
+                    // 좌표가 정상일 때만 보낸다. 안 보내면 백엔드가 흰 종이를 알아서 찾는다.
+                    if (boxCoords) formData.append('coords', JSON.stringify(boxCoords));
 
                     const response = await fetch('/api/diagnose', { method: 'POST', body: formData });
-                    if (!response.ok) throw new Error("서버 응답 오류 (Flask 백엔드를 확인하세요)");
-                    
-                    const data = await response.json();
+
+                    // 서버가 JSON 이 아닌 걸 돌려줄 수도 있다(파이썬 오류 페이지 등).
+                    // 그냥 response.json() 하면 "Unexpected token '<'" 로 터지므로 먼저 글자로 받는다.
+                    const raw = await response.text();
+                    let data;
+                    try {
+                        data = JSON.parse(raw);
+                    } catch (e) {
+                        throw new Error(
+                            `서버가 오류를 냈습니다 (HTTP ${response.status}). ` +
+                            `python app.py 를 실행한 터미널에 찍힌 빨간 글씨를 확인해주세요.`);
+                    }
+
+                    // 촬영 조건 미달(400)은 오류가 아니라 '다시 찍어주세요' 안내다.
+                    // 백엔드가 사람이 읽을 수 있는 문장을 data.error 로 보내므로 그대로 보여준다.
+                    if (!response.ok) {
+                        showRetake(data.error || '진단할 수 없는 사진입니다.', data.reasons || []);
+                        return;
+                    }
                     const tempImageUrl = URL.createObjectURL(blob);
                     renderResults(data, tempImageUrl); 
 
@@ -101,7 +121,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const y = clamp((guide.top - container.top - offY) / dh);
         const w = Math.min(1 - x, guide.width / dw);
         const h = Math.min(1 - y, guide.height / dh);
-        return { x, y, width: w, height: h };
+        const box = { x, y, width: w, height: h };
+        // NaN·Infinity 가 섞이면 JSON 에서 null 이 되어 서버가 오류를 낸다 → 아예 안 보낸다
+        const ok = Object.values(box).every(v => Number.isFinite(v)) && w > 0.01 && h > 0.01;
+        if (!ok) { console.warn('가이드 박스 좌표를 계산하지 못해 자동 탐지로 넘깁니다.', box); return null; }
+        return box;
+    }
+
+    // 2-1. 촬영 조건 미달 → 촬영 화면으로 돌아가며 이유를 알려준다
+    function showRetake(message, reasons) {
+        loadingSection.classList.add('hidden');
+        webcamSection.classList.remove('hidden');
+        alert('다시 촬영해주세요\n\n' + message +
+              (reasons.length > 1 ? '\n\n- ' + reasons.slice(1).join('\n- ') : ''));
     }
 
     // 3. 에러 발생 시 로딩 화면 끄고 복귀하는 함수 (무한 로딩 방지)
@@ -156,9 +188,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }));
 
         document.getElementById('best-season-name').textContent = data.best_group;
+
         renderSeasonGuide(data.best_group);
+
+
+        // 웜/쿨 판정 — 4계절보다 신뢰도가 높은 주 결과
+        const tone = data.tone || {};
+        document.getElementById('tone-line').innerHTML =
+            `${tone.label ?? '-'} 톤 · 웜 ${tone.warm ?? '-'}% / 쿨 ${tone.cool ?? '-'}%` +
+            `<br><span class="tone-sub">${data.message ?? ''}</span>`;
+
+        // 조명 보정 비교 — CSS 효과가 아니라 백엔드가 실제로 보정한 사진을 쓴다
+
         document.getElementById('img-original').src = imageUrl;
-        document.getElementById('img-corrected').src = imageUrl; 
-        document.getElementById('img-corrected').style.filter = "contrast(1.1) brightness(1.05)";
+        const corrected = document.getElementById('img-corrected');
+        corrected.style.filter = '';
+        corrected.src = data.corrected_image || imageUrl;
     }
 });

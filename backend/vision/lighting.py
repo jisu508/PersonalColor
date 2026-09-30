@@ -127,7 +127,8 @@ def gray_world_gains(img: np.ndarray) -> np.ndarray:
     return avg.mean() / avg
 
 
-def white_balance(img: np.ndarray, white_box: Box, target: float = 255.0) -> WhiteBalanceResult:
+def white_balance(img: np.ndarray, white_box: Box | None = None, target=255.0,
+                  reference_bgr: np.ndarray | None = None) -> WhiteBalanceResult:
     """
     ★ 보통은 이 함수 하나만 쓰면 된다 ★
     흰 종이 기준으로 조명을 보정하고, 보정이 믿을 만한지 진단 정보까지 돌려준다.
@@ -141,21 +142,41 @@ def white_balance(img: np.ndarray, white_box: Box, target: float = 255.0) -> Whi
         cv2.imwrite("outputs/corrected.jpg", wb.image)
         print(wb.gains, wb.warnings)
     """
+    # target 은 숫자 하나(=중성 흰색) 또는 [B,G,R] 세 개를 받는다.
+    # 세 개를 주면 "기준물을 이 색으로 맞춰라" 라는 뜻 —
+    # 복사용지처럼 형광증백제가 들어 푸르게 찍히는 종이를 보정할 때 쓴다.
+    target = np.asarray(target, np.float32).reshape(-1)
+    if target.size == 1:
+        target = np.repeat(target, 3)
     if img is None:
         raise ValueError("img 가 None 입니다. cv2.imread 경로를 확인하세요.")
     if img.ndim != 3 or img.shape[2] != 3:
         raise ValueError(f"3채널 BGR 컬러 사진이 필요합니다. (받은 모양: {img.shape})")
+    if white_box is None and reference_bgr is None:
+        raise ValueError("white_box 또는 reference_bgr 중 하나는 있어야 합니다.")
 
-    box = clip_box(white_box, img.shape)
-
-    # ── 1) 보정 (check2.py와 동일한 계산) ─────────────────────────
-    gains = estimate_gains(img, box, target)
+    # ── 1) 보정 ─────────────────────────────────────────────────
+    # reference_bgr 가 오면 그 색을 흰색 기준으로 삼는다
+    # (paper.white_reference() 가 종이에서 포화·그림자를 뺀 평균색을 준다)
+    if reference_bgr is not None:
+        ref = np.asarray(reference_bgr, np.float32).copy()
+        ref[ref == 0] = 1.0
+        gains = target / ref
+        box = clip_box(white_box, img.shape) if white_box is not None else None
+    else:
+        box = clip_box(white_box, img.shape)
+        gains = estimate_gains(img, box, target)
     corrected = apply_gains(img, gains)
 
-    # ── 2) 품질 진단 (check2.py엔 없던 부분) ──────────────────────
-    paper = crop(img, box)
-    paper_bgr = paper.reshape(-1, 3).astype(np.float32).mean(axis=0)
-    paper_lab = mean_lab(img, box=box)
+    # ── 2) 품질 진단 ────────────────────────────────────────────
+    if box is not None:
+        paper = crop(img, box)
+        paper_bgr = paper.reshape(-1, 3).astype(np.float32).mean(axis=0)
+        paper_lab = mean_lab(img, box=box)
+    else:
+        paper = np.asarray(reference_bgr, np.float32).reshape(1, 1, 3)
+        paper_bgr = np.asarray(reference_bgr, np.float32)
+        paper_lab = mean_lab(np.clip(paper, 0, 255).astype(np.uint8))
     cast_strength = float(np.hypot(paper_lab[1], paper_lab[2]))   # 종이의 a,b가 0에서 떨어진 정도
 
     t = THRESHOLDS

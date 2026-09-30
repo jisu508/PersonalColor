@@ -10,10 +10,12 @@
    2단계 4계절  : 밝기(L)와 채도(C)로 봄/가을, 여름/겨울 구분  ← 아직 검증 전(임시)
 
  웜/쿨 판정 방법 4가지를 넣어두고 골라 쓸 수 있게 했다.
-   "bc"       D = b - C                 ← 기본값. 우리 팀이 모은 연예인 40명에서 정확도 100%
-                                           (b(노란기)와 C(채도)를 같이 보는 값. 웜은 둘 다 높다)
-   "b"        피부 b값만 사용            ← 홍조(a)에 안 흔들림. 40명에서 92%
-   "paper_d"  논문① 판별식 D             ← 선행연구. 40명에서 98%
+   "bc"       D = b - C                 ← 기본값. 웹캠 사진에서 웜/쿨을 제대로 갈랐다
+                                           (b를 채도 C와 견주는 값이라 홍조가 심해도 덜 흔들림)
+   "hue"      색상각 h = atan2(b, a)     ← bc 와 성질이 비슷. 붉은 쪽이면 작고 노란 쪽이면 크다
+   "b"        피부 b값만 사용            ← 연예인 사진(보정된 화보)에서는 85%로 가장 좋았지만,
+                                           웹캠에서는 홍조가 심한 사람을 웜으로 잘못 본다
+   "paper_d"  논문① 판별식 D             ← 선행연구 비교용
    "smtc"     논문③·ShowMeTheColor 방식  ← 선행연구 비교용
  세 방법을 같은 사진에 돌려 비교하려면 compare_methods() 를 쓴다.
 
@@ -51,14 +53,16 @@ class SeasonResult:
     runner_up: str           # 2위 시즌 키
     gap: float               # 1위 - 2위 (신뢰도 계산에 사용)
     warm_score: float        # 0보다 크면 웜 쪽 (경계에서 얼마나 떨어졌는지)
-    warm_cool: str           # "warm" 또는 "cool"
+    warm_cool: str           # "warm" / "cool" / "borderline"(경계형)
     method: str              # 쓴 판정 방법
+    warm_percent: float = 50.0   # 웜일 확률 0~100
     detail: dict = field(default_factory=dict)   # 근거 숫자들
 
     def to_dict(self) -> dict:
         return {"seasons": {k: round(v, 1) for k, v in self.seasons.items()},
                 "top": self.top, "runner_up": self.runner_up, "gap": round(self.gap, 1),
-                "warm_cool": self.warm_cool, "warm_score": round(self.warm_score, 2),
+                "warm_cool": self.warm_cool, "warm_percent": round(self.warm_percent, 1),
+                "warm_score": round(self.warm_score, 2),
                 "method": self.method, "detail": self.detail}
 
 
@@ -80,6 +84,39 @@ def _score_bc(colors: dict, ref: dict):
     D = b - C
     return (D - cfg["threshold"]) / cfg["scale"], {"D_bc": round(D, 2), "threshold": cfg["threshold"],
                                                   "skin_a": round(a, 1), "skin_b": round(b, 1), "skin_C": round(C, 1)}
+
+
+def hue_config(ref: dict) -> dict:
+    """
+    색상각 기준선을 돌려준다.
+
+    촬영 환경(카메라·종이·조명)이 바뀌면 h 가 통째로 평행 이동한다.
+    흰 종이가 파랗게 찍히는 것도, 같은 종이를 계속 쓰는 한 '항상 같은 오프셋' 이라
+    기준선 하나로 흡수된다. 그래서 환경마다 기준선을 따로 저장하고 골라 쓴다.
+      warm_cool.active_setup = "팀원_노트북_A4용지"  ← JSON 에서 이 한 줄만 바꾸면 된다
+    """
+    cfg = dict(ref["warm_cool"]["hue"])
+    name = ref["warm_cool"].get("active_setup")
+    setup = (ref["warm_cool"].get("setups") or {}).get(name)
+    if setup:
+        cfg.update({k: v for k, v in setup.items() if not k.startswith("_")})
+        cfg["_setup"] = name
+    return cfg
+
+
+def _score_hue(colors: dict, ref: dict):
+    """
+    색상각 h = atan2(b, a)  (도 단위)
+    피부색이 '붉은 쪽'이면 작고 '노란 쪽'이면 크다. 채도(색의 진하기)와 무관해서
+    조명이 세거나 홍조가 있어도 덜 흔들린다.
+    """
+    cfg = hue_config(ref)
+    lab = colors["skin"]
+    a, b = float(lab[1]), float(lab[2])
+    h = float(np.degrees(np.arctan2(b, a)))
+    return (h - cfg["threshold"]) / cfg["scale"], {"hue_deg": round(h, 1), "threshold": cfg["threshold"],
+                                                  "setup": cfg.get("_setup"),
+                                                  "skin_a": round(a, 1), "skin_b": round(b, 1)}
 
 
 def _score_b(colors: dict, ref: dict):
@@ -120,7 +157,8 @@ def _score_smtc(colors: dict, ref: dict):
                                               "cool_distance": round(cool_d, 1), "used_parts": used}
 
 
-_METHODS = {"bc": _score_bc, "b": _score_b, "paper_d": _score_paper_d, "smtc": _score_smtc}
+_METHODS = {"bc": _score_bc, "hue": _score_hue, "b": _score_b,
+            "paper_d": _score_paper_d, "smtc": _score_smtc}
 
 
 def warm_cool_score(colors: dict, ref: dict | None = None, method: str | None = None):
@@ -145,8 +183,9 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
 
     계산 방법
       1) 웜/쿨 점수, 밝기 점수, 채도 점수 세 개를 구한다 (각각 0 기준으로 ±)
-      2) 시즌 4개는 이 세 축에서 각각 +1/-1 위치를 갖는다 (JSON에 정의)
-      3) 내 점수와 각 시즌 위치의 거리를 재고, softmax 로 퍼센티지로 바꾼다
+      2) 웜 대 쿨 비율을 먼저 정한다 (예: 웜 70% / 쿨 30%)
+      3) 각 쪽 안에서 밝기·채도로 두 계절을 나눈다 (봄 vs 가을 / 여름 vs 겨울)
+      4) 둘을 곱해 시즌 4개의 퍼센티지를 만든다 → 1위 시즌은 항상 웜/쿨 판정과 같은 쪽
     """
     ref = ref or load_reference()
     method = method or ref["warm_cool"]["method"]
@@ -162,32 +201,65 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
     light = (L - axis["lightness"]["center"]) / axis["lightness"]["scale"]
     chroma = (C - axis["chroma"]["center"]) / axis["chroma"]["scale"]
 
-    # 점수가 너무 크면 한쪽으로만 쏠리므로 -2 ~ +2 로 제한
-    v = np.clip([warm, light, chroma], -2.0, 2.0)
+    # 점수가 너무 크면 한쪽으로만 쏠리므로 -3 ~ +3 으로 제한
+    v_warm, v_light, v_chroma = np.clip([warm, light, chroma], -3.0, 3.0)
 
-    names, dists = [], []
-    for key, s in ref["seasons"].items():
-        center = np.array([s["warm"], s["light"], s["chroma"]], dtype=float)
-        # 웜/쿨 축에 2배 비중 (웜/쿨이 먼저 갈리고, 나머지는 보조)
-        weight = np.array([2.0, 1.0, 1.0])
-        names.append(key)
-        dists.append(float(np.sqrt((weight * (v - center) ** 2).sum())))
+    # ── 퍼센티지는 두 단계로 계산한다 ──────────────────────────
+    # 1) 웜 대 쿨 비율을 먼저 정한다 (웜/쿨 점수를 0~1 로 변환)
+    #    경계에 있으면 50:50 에 가깝고, 확실하면 90:10 처럼 벌어진다
+    #    웜 확률 = 1 / (1 + e^-((h - 기준선) / 폭))     ← 팀 합의 공식
+    p_warm = float(1.0 / (1.0 + np.exp(-v_warm)))
+    p_cool = 1.0 - p_warm
 
-    d = np.array(dists)
-    logits = -d / max(1e-6, ref.get("softmax_temperature", 1.2))
-    p = np.exp(logits - logits.max())
-    p = 100.0 * p / p.sum()
+    # 2) 같은 쪽 안에서 밝기·채도로 두 계절을 나눈다
+    #    (봄 vs 가을 / 여름 vs 겨울)
+    #    진 쪽은 안에서 더 나누지 않고 반반으로 둔다.
+    #    (밝기·채도 축은 아직 데이터로 검증하지 않았다. 진 쪽 안에서 어느 계절인지는
+    #     의미가 없는데, 그걸 갈라놓으면 "웜 62% 인데 1위는 여름 쿨" 같은 모순이 생긴다)
+    temp = max(1e-6, ref.get("softmax_temperature", 1.2))
+    win_side = 1 if p_warm >= 0.5 else -1
+    seasons: dict[str, float] = {}
+    for side, side_p in ((1, p_warm), (-1, p_cool)):
+        keys = [k for k, sv in ref["seasons"].items() if sv["warm"] == side]
+        if side != win_side:                       # 진 쪽 → 반반
+            for k in keys:
+                seasons[k] = float(side_p * 100.0 / len(keys))
+            continue
+        d = []
+        for k in keys:
+            sv = ref["seasons"][k]
+            d.append(float(np.hypot(v_light - sv["light"], v_chroma - sv["chroma"])))
+        logits = -np.array(d) / temp
+        w = np.exp(logits - logits.max())
+        w = w / w.sum()
+        for k, ww in zip(keys, w):
+            seasons[k] = float(side_p * ww * 100.0)
 
+    # 1위 시즌은 반드시 '이긴 쪽'에서 고른다
+    win_keys = [k for k in seasons if ref["seasons"][k]["warm"] == win_side]
+    top = max(win_keys, key=lambda k: seasons[k])
+    names = list(seasons)
+    p = np.array([seasons[k] for k in names])
     order = np.argsort(-p)
-    seasons = {names[i]: float(p[i]) for i in range(len(names))}
+    runner_up = next(k for k in (names[i] for i in order) if k != top)
     detail.update({"skin_L": round(L, 1), "skin_C": round(C, 1),
-                   "axis": {"warm": round(float(v[0]), 2), "light": round(float(v[1]), 2),
-                            "chroma": round(float(v[2]), 2)},
+                   "axis": {"warm": round(float(v_warm), 2), "light": round(float(v_light), 2),
+                            "chroma": round(float(v_chroma), 2)},
+                   "warm_percent": round(p_warm * 100, 1),
                    "provisional_second_axis": True})
 
-    return SeasonResult(seasons=seasons, top=names[order[0]], runner_up=names[order[1]],
-                        gap=float(p[order[0]] - p[order[1]]), warm_score=float(warm),
-                        warm_cool="warm" if warm > 0 else "cool", method=method, detail=detail)
+    # 경계형: 기준선에서 ±band 안이면 웜/쿨을 단정하지 않는다 (예: h 50~58°)
+    cfg = hue_config(ref) if method == "hue" else ref["warm_cool"][method]
+    band = cfg.get("borderline_band")
+    if band is not None and abs(warm) * cfg.get("scale", 1.0) <= band + 1e-6:
+        verdict = "borderline"
+    else:
+        verdict = "warm" if warm > 0 else "cool"
+
+    return SeasonResult(seasons=seasons, top=top, runner_up=runner_up,
+                        gap=float(abs(seasons[top] - seasons[runner_up])), warm_score=float(warm),
+                        warm_cool=verdict, warm_percent=p_warm * 100.0,
+                        method=method, detail=detail)
 
 
 def compare_methods(colors: dict, ref: dict | None = None) -> dict:

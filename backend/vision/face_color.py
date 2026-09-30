@@ -70,6 +70,10 @@ PARAMS = {
     "trim_high": 90,            # 밝기 상위 몇 % 이상 버릴지 (번들거림)
     "saturated": 250,           # 이 값 이상 채널이 있는 픽셀은 버림 (하얗게 날아간 반사광)
     "min_pixels": 30,           # 거르고 난 픽셀이 이보다 적으면 그 부위는 '사용 안 함'
+    "use_forehead_in_skin": False,
+    "_use_forehead_근거": "이마를 피부 대표색에 넣으면 웜/쿨 구분이 나빠진다. 실측: "
+                          "라벨 확실한 웹캠 4장 간격 +4.3°→+6.8°, 팀원 촬영본(경계형 vs 쿨) -0.1°→+4.2°. "
+                          "앞머리 그림자·이마 번들거림이 섞이기 때문. 볼이 둘 다 실패할 때만 이마를 쓴다",
     "forehead_max_de": 12.0,    # 이마 색이 두 볼 평균과 ΔE 이만큼 넘게 다르면 → 앞머리로 보고 제외
     "cheek_pair_warn_de": 8.0,  # 양 볼 색 차이가 이보다 크면 → 한쪽만 그늘졌다고 경고
     "iris_inner": 0.35,         # 홍채 반지름 중 안쪽 35% 는 동공(검정)으로 보고 제외
@@ -79,7 +83,7 @@ PARAMS = {
     # ── 머리카락 ──
     "hair_band_ratio": 0.18,    # 이마 위로 얼굴 높이의 18% 만큼을 '머리 띠'로 본다
     "hair_darker_than_skin": 15.0,  # 피부보다 L 이 이만큼 어두운 픽셀만 머리카락으로 인정
-    "hair_min_dark_ratio": 0.25,    # 띠 영역에서 어두운 픽셀이 25% 미만이면 → 배경만 잡힌 것으로 보고 제외
+    "hair_min_dark_ratio": 0.20,    # 띠 영역에서 어두운 픽셀이 25% 미만이면 → 배경만 잡힌 것으로 보고 제외
     # ── 사진 품질 (5단계 신뢰도 재료) ──
     "min_sharpness": 10.0,      # 얼굴을 가로 400px 로 맞춘 뒤 라플라시안 분산. 이보다 낮으면 흐림
     "min_brightness": 35.0,     # 피부 L 하한 (너무 어두운 사진)
@@ -234,7 +238,7 @@ def _hair_band_polygon(lm: FaceLandmarks) -> np.ndarray:
     return np.vstack([line, (line - np.array([0, up], np.float32))[::-1]])
 
 
-def _hair(img, lm: FaceLandmarks, skin_lab) -> RegionColor:
+def _hair(img, lm: FaceLandmarks, skin_lab, include_forehead: bool) -> RegionColor:
     """
     머리카락 색. 머리 띠 + (앞머리로 제외된 이마) 안에서 '피부보다 충분히 어두운' 픽셀만 사용.
       - 어두운 픽셀만 쓰는 이유 : 띠 안에 배경(벽·하늘)이 섞이기 때문
@@ -244,8 +248,10 @@ def _hair(img, lm: FaceLandmarks, skin_lab) -> RegionColor:
         return RegionColor(lab=None, n_total=0, n_used=0, used=False, note="피부색을 몰라 머리색 판단 불가")
 
     mask = polygon_mask(img.shape, _hair_band_polygon(lm))
-    if not getattr(_hair, "_skip_forehead", False):
-        mask |= polygon_mask(img.shape, lm.points[REGIONS["forehead"]])   # 앞머리에 가려진 이마도 머리로
+    # 이마가 '앞머리에 가려져 제외된' 경우에만 이마 영역도 머리카락 후보에 넣는다.
+    # (이마가 피부로 잘 잡힌 사람은 넣으면 안 됨 — 밝은 피부가 섞여 머리 탐색을 방해한다)
+    if include_forehead:
+        mask |= polygon_mask(img.shape, lm.points[REGIONS["forehead"]])
     px = pixels_in_mask(img, mask)
     if len(px) == 0:
         return RegionColor(lab=None, n_total=0, n_used=0, used=False, note="머리 영역이 사진 밖")
@@ -322,9 +328,14 @@ def extract_face_colors(img_bgr: np.ndarray, landmarks: FaceLandmarks | None = N
             if d > PARAMS["forehead_max_de"]:
                 fh.used = False
                 fh.note = f"볼과 색 차이 ΔE {d:.1f} → 앞머리·그림자로 보고 제외"
-        parts = cheeks + ([fh] if fh.used else [])
+        # 피부 대표색은 볼만 쓴다 (이마는 앞머리·번들거림이 섞여 웜/쿨 구분을 흐린다)
+        parts = cheeks + ([fh] if (fh.used and PARAMS["use_forehead_in_skin"]) else [])
         # 픽셀 수로 가중평균 (넓은 부위가 더 큰 비중)
         skin = np.average([p.lab for p in parts], axis=0, weights=[p.n_used for p in parts])
+    elif regions["forehead"].used:
+        # 볼을 둘 다 못 쓸 때만 이마로 대신한다
+        skin = regions["forehead"].lab
+        warnings.append("볼에서 피부색을 못 읽어 이마로 대신했습니다. 정확도가 떨어집니다.")
     else:
         warnings.append("볼 영역에서 피부색을 추출하지 못했습니다.")
 
@@ -343,7 +354,7 @@ def extract_face_colors(img_bgr: np.ndarray, landmarks: FaceLandmarks | None = N
         warnings.append("눈동자 색을 추출하지 못했습니다. 눈을 뜨고 정면을 봐주세요.")
 
     # ── 머리카락 ──
-    regions["hair"] = _hair(img_bgr, lm, skin)
+    regions["hair"] = _hair(img_bgr, lm, skin, include_forehead=not regions["forehead"].used)
     hair = regions["hair"].lab if regions["hair"].used else None
     if hair is None and skin is not None:
         warnings.append("머리카락 색을 추출하지 못했습니다. " + regions["hair"].note)

@@ -1,31 +1,3 @@
-
-# 가상환경
-venv/
-.venv/
-env/
-
-# Python 캐시
-__pycache__/
-*.pyc
-*.pyo
-
-# Jupyter
-.ipynb_checkpoints/
-
-# 환경변수 / 민감정보
-.env
-
-# OS / 에디터
-.DS_Store
-Thumbs.db
-.vscode/
-
-# 테스트/실험용 이미지, 결과물 (필요하면 유지해도 됨)
-*.jpg
-*.jpeg
-*.png
-!screenshots/**
-
 __pycache__/
 *.pyc
 .venv/
@@ -42,5 +14,9 @@ data/samples/*
 !data/samples/.gitkeep
 !data/samples/README.md
 
+# 수집한 연예인·웹캠 사진도 올리지 않음
 data/collected/
 *.webp
+
+# 웹에서 촬영한 기록 (사람 얼굴이라 깃에 올리지 않는다)
+data/captures/
