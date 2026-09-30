@@ -8,10 +8,10 @@
     <!-- 폰트 적용 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
     
     <!-- 분리된 외부 CSS 파일 연결 -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
 </head>
 <body>
     <div class="app-container">
@@ -72,8 +72,6 @@
 
                 <div class="diagnosis-card">
                     <h2>퍼스널컬러 진단 결과</h2>
-                    <!-- 웜/쿨 판정 (백엔드 tone) — 4계절보다 이게 주 결과 -->
-                    <p class="tone-line" id="tone-line"></p>
                     <ul class="percentage-list" id="percentage-list"></ul>
                 </div>
                 
@@ -115,6 +113,6 @@
     </div>
     
     <!-- JS 파일 연동 -->
-    <script src="{{ url_for('static', filename='main.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
