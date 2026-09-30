@@ -12,10 +12,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 시즌별 가이드 이미지 (static/images/ 폴더에 넣어두세요)
     const SEASON_IMAGES = {
-        '봄':   { style: '최종_봄.png',   makeup: '봄_화장품.png', clothes: '여름_코디.png',  title: '봄 웜톤 가이드' },
+        '봄':   { style: '최종_봄.png',   makeup: '봄_화장품.png', clothes: '봄_코디.png',  title: '봄 웜톤 가이드' },
         '여름': { style: '최종_여름.png', makeup: '여름_화장품.png', clothes: '여름_코디.png', title: '여름 쿨톤 가이드' },
         '가을': { style: '최종_가을.png', makeup: '가을_화장품.png', clothes: '가을_코디.png', title: '가을 웜톤 가이드' },
-        '겨울': { style: '최종_겨울.png', makeup: '겨울_화장품.png', clothes: '여름_코디.png', title: '겨울 쿨톤 가이드' }
+        '겨울': { style: '최종_겨울.png', makeup: '겨울_화장품.png', clothes: '겨울_코디.png', title: '겨울 쿨톤 가이드' }
     };
 
     function renderSeasonGuide(bestGroup) {
