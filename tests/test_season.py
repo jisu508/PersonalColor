@@ -110,10 +110,12 @@ def test_compare_methods_returns_all_methods():
     assert set(out) == {"bc", "hue", "b", "paper_d", "smtc"}
 
 
-def test_hue_matches_webcam_labels():
-    """라벨이 확실한 웹캠 4장(현재 파이프라인 측정값): 웜 47.4°/48.2°, 쿨 43.1°/35.9°"""
+def test_hue_classifies_by_configured_threshold():
+    """설정된 기준선을 기준으로 위면 웜, 아래면 쿨로 갈려야 한다 (기준선 값 자체는 보정 대상)"""
     import numpy as np
-    for h_deg, expect in ((47.4, "warm"), (48.2, "warm"), (43.1, "cool"), (35.9, "cool")):
+    ref = load_reference()["warm_cool"]["hue"]
+    t, band = ref["threshold"], ref["borderline_band"]
+    for h_deg, expect in ((t + band + 3, "warm"), (t - band - 3, "cool")):
         a = 10.0
         b = a * np.tan(np.radians(h_deg))
         r = diagnose_season({"skin": [65, a, b]})

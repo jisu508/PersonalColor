@@ -34,14 +34,13 @@ PARAMS = {
     "max_border_sides": 2,   # 사진 테두리에 3면 이상 닿으면 벽으로 본다
     "prefer_area_ratio": 0.15,  # 이보다 커지면 점수를 깎는다 (손에 든 종이는 보통 사진의 2~15%)
     "border_penalty": 0.25,     # 테두리에 닿는 면 하나당 점수 25% 감점
-    "min_clean_ratio": 0.25,    # 포화되지 않은 화소가 1/4 은 있어야 기준색으로 쓴다
+    "min_clean_ratio": 0.5,     # 포화되지 않은 화소가 절반은 있어야 기준색으로 쓴다
 }
 
 
 TRIM = {
     "saturated": 250,      # 이 값 이상 = 하얗게 날아간 픽셀 → 기준에서 제외
     "shadow_percentile": 25,   # 어두운 쪽 25% (그림자·접힌 자국) 제외
-    "specular_percentile": 95, # 밝은 쪽 5% (반사광) 제외 — 250 미만이어도 반사는 색을 왜곡한다
     "min_pixels": 200,
 }
 
@@ -155,7 +154,6 @@ def white_reference(img_bgr: np.ndarray):
     흰 종이 덩어리 '전체'에서 아래 픽셀을 빼고 남은 것의 평균색을 기준으로 삼는다.
       - 하얗게 날아간 픽셀(250 이상)  → 진짜 색을 알 수 없음
       - 어두운 쪽 25%(그림자·접힌 자국) → 조명색이 아니라 그늘색
-      - 밝은 쪽 5%(반사광)            → 광원이 그대로 비친 것이라 종이색이 아님
 
     사람이 종이에서 '깨끗한 부분'을 손으로 골라 찍던 것을, 자동으로 하는 것과 같다.
     반환: (기준색 BGR, 진단 dict)
@@ -168,12 +166,9 @@ def white_reference(img_bgr: np.ndarray):
     clean_ratio = float(keep.mean())
     if keep.sum() >= TRIM["min_pixels"]:
         px = px[keep]
-    # 그림자(아래 25%)와 반사광(위 5%)을 빼고 가운데 구간만 쓴다
     lum = px.mean(axis=1)
     lo = np.percentile(lum, TRIM["shadow_percentile"])
-    hi = np.percentile(lum, TRIM["specular_percentile"])
-    mid = (lum >= lo) & (lum <= hi)
-    sel = px[mid] if mid.sum() >= TRIM["min_pixels"] else px
+    sel = px[lum >= lo] if (lum >= lo).sum() >= TRIM["min_pixels"] else px
 
     x, y = int(stats_i[cv2.CC_STAT_LEFT]), int(stats_i[cv2.CC_STAT_TOP])
     bw, bh = int(stats_i[cv2.CC_STAT_WIDTH]), int(stats_i[cv2.CC_STAT_HEIGHT])
