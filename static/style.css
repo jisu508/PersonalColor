@@ -241,6 +241,8 @@ video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 }
 .best-title { font-size: 0.9rem; color: var(--ink-soft); margin-bottom: 8px; }
 .best-season { font-family: 'Jua', sans-serif; font-size: 2.3rem; font-weight: 400; color: var(--ink); }
+.tone-line { margin-top: 10px; font-size: 1.05rem; color: var(--ink); }
+.tone-sub { display: block; margin-top: 6px; font-size: 0.85rem; color: var(--ink-soft); }
 
 /* 보정 비교 */
 .correction-card, .season-guide-card { padding: 28px 24px; }
