@@ -127,7 +127,7 @@ def gray_world_gains(img: np.ndarray) -> np.ndarray:
     return avg.mean() / avg
 
 
-def white_balance(img: np.ndarray, white_box: Box | None = None, target: float = 255.0,
+def white_balance(img: np.ndarray, white_box: Box | None = None, target=255.0,
                   reference_bgr: np.ndarray | None = None) -> WhiteBalanceResult:
     """
     ★ 보통은 이 함수 하나만 쓰면 된다 ★
@@ -142,6 +142,12 @@ def white_balance(img: np.ndarray, white_box: Box | None = None, target: float =
         cv2.imwrite("outputs/corrected.jpg", wb.image)
         print(wb.gains, wb.warnings)
     """
+    # target 은 숫자 하나(=중성 흰색) 또는 [B,G,R] 세 개를 받는다.
+    # 세 개를 주면 "기준물을 이 색으로 맞춰라" 라는 뜻 —
+    # 복사용지처럼 형광증백제가 들어 푸르게 찍히는 종이를 보정할 때 쓴다.
+    target = np.asarray(target, np.float32).reshape(-1)
+    if target.size == 1:
+        target = np.repeat(target, 3)
     if img is None:
         raise ValueError("img 가 None 입니다. cv2.imread 경로를 확인하세요.")
     if img.ndim != 3 or img.shape[2] != 3:

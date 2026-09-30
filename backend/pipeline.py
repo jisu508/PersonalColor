@@ -53,7 +53,10 @@ def run_pipeline(img_bgr: np.ndarray, guide_box=None, method: str | None = None,
     work = img_bgr
     if not skip_white_balance:
         try:
-            target = ref.get("white_balance", {}).get("target", 255.0)
+            wbcfg = ref.get("white_balance", {})
+            # 기준물 자체가 중성이 아니면(예: 형광증백제 종이) 그 치우침만큼 목표색을 옮긴다
+            tint = np.asarray(wbcfg.get("reference_tint", [1.0, 1.0, 1.0]), np.float32)
+            target = float(wbcfg.get("target", 255.0)) * tint
             if guide_box is not None:
                 box = box_from_ratio(img_bgr, guide_box)
                 wb = white_balance(img_bgr, box, target=target)

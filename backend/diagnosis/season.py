@@ -86,17 +86,36 @@ def _score_bc(colors: dict, ref: dict):
                                                   "skin_a": round(a, 1), "skin_b": round(b, 1), "skin_C": round(C, 1)}
 
 
+def hue_config(ref: dict) -> dict:
+    """
+    색상각 기준선을 돌려준다.
+
+    촬영 환경(카메라·종이·조명)이 바뀌면 h 가 통째로 평행 이동한다.
+    흰 종이가 파랗게 찍히는 것도, 같은 종이를 계속 쓰는 한 '항상 같은 오프셋' 이라
+    기준선 하나로 흡수된다. 그래서 환경마다 기준선을 따로 저장하고 골라 쓴다.
+      warm_cool.active_setup = "팀원_노트북_A4용지"  ← JSON 에서 이 한 줄만 바꾸면 된다
+    """
+    cfg = dict(ref["warm_cool"]["hue"])
+    name = ref["warm_cool"].get("active_setup")
+    setup = (ref["warm_cool"].get("setups") or {}).get(name)
+    if setup:
+        cfg.update({k: v for k, v in setup.items() if not k.startswith("_")})
+        cfg["_setup"] = name
+    return cfg
+
+
 def _score_hue(colors: dict, ref: dict):
     """
     색상각 h = atan2(b, a)  (도 단위)
     피부색이 '붉은 쪽'이면 작고 '노란 쪽'이면 크다. 채도(색의 진하기)와 무관해서
     조명이 세거나 홍조가 있어도 덜 흔들린다.
     """
-    cfg = ref["warm_cool"]["hue"]
+    cfg = hue_config(ref)
     lab = colors["skin"]
     a, b = float(lab[1]), float(lab[2])
     h = float(np.degrees(np.arctan2(b, a)))
     return (h - cfg["threshold"]) / cfg["scale"], {"hue_deg": round(h, 1), "threshold": cfg["threshold"],
+                                                  "setup": cfg.get("_setup"),
                                                   "skin_a": round(a, 1), "skin_b": round(b, 1)}
 
 
@@ -230,7 +249,7 @@ def diagnose_season(colors: dict, ref: dict | None = None, method: str | None = 
                    "provisional_second_axis": True})
 
     # 경계형: 기준선에서 ±band 안이면 웜/쿨을 단정하지 않는다 (예: h 50~58°)
-    cfg = ref["warm_cool"][method]
+    cfg = hue_config(ref) if method == "hue" else ref["warm_cool"][method]
     band = cfg.get("borderline_band")
     if band is not None and abs(warm) * cfg.get("scale", 1.0) <= band + 1e-6:
         verdict = "borderline"
