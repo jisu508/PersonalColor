@@ -7,8 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const webcamSection = document.getElementById('webcam-section');
     const loadingSection = document.getElementById('loading-section');
     const resultSection = document.getElementById('result-section');
+    const previewSection = document.getElementById('preview-section');
+    const previewCanvas = document.getElementById('preview-canvas');
 
     let stream = null;
+    let faceCanvas = null;   // 얼굴 가이드 영역만 잘라낸 캔버스
+    let currentSeason = null;
 
     // 시즌별 가이드 이미지 (static/images/ 폴더에 넣어두세요)
     const SEASON_IMAGES = {
@@ -17,6 +21,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         '가을': { style: '최종_가을.png', makeup: '가을_화장품.png', clothes: '가을_코디.png', title: '가을 웜톤 가이드' },
         '겨울': { style: '최종_겨울.png', makeup: '겨울_화장품.png', clothes: '겨울_코디.png', title: '겨울 쿨톤 가이드' }
     };
+
+    // 얼굴 합성용 시즌 이미지 (static/images/ 폴더)
+    const PREVIEW_IMAGES = {
+        spring: { label: '봄 웜',   file: '봄_웜_확인.png' },
+        summer: { label: '여름 쿨', file: '여름_쿨_확인.png' },
+        autumn: { label: '가을 웜', file: '가을_웜_확인.png' },
+        winter: { label: '겨울 쿨', file: '겨울_쿨_확인.png' }
+    };
+    // 시즌 이미지(1254x1254 기준)의 회색 타원 위치. 어긋나면 이 숫자만 조절하세요.
+    const OVAL = { size: 1254, cx: 626, cy: 628, rx: 311, ry: 396 };
 
     function renderSeasonGuide(bestGroup) {
         const card = document.getElementById('season-guide-card');
@@ -52,7 +66,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 가이드 박스 좌표는 화면을 숨기기 '전에' 재야 한다.
         // 숨긴 요소는 크기가 0 이라 계산이 NaN 이 되고, JSON 으로는 null 이 되어 서버가 오류를 낸다.
-        const boxCoords = getGuideCoords();
+        const boxCoords = getGuideCoords('guide-box');
+        const faceCoords = getGuideCoords('face-guide');
 
         webcamSection.classList.add('hidden');
         loadingSection.classList.remove('hidden');
@@ -65,6 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 얼굴 가이드 영역만 잘라서 보관 (흰 종이 부분 제외)
+            faceCanvas = cropToCanvas(canvas, faceCoords);
 
             canvas.toBlob(async (blob) => {
                 try {
@@ -109,9 +127,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 가이드 박스가 실제 영상(object-fit: cover)의 어느 부분인지 0~1 비율로 계산
-    function getGuideCoords() {
+    function getGuideCoords(elId = 'guide-box') {
         const container = video.parentElement.getBoundingClientRect();
-        const guide = document.getElementById('guide-box').getBoundingClientRect();
+        const guide = document.getElementById(elId).getBoundingClientRect();
         const vw = video.videoWidth, vh = video.videoHeight;
         const scale = Math.max(container.width / vw, container.height / vh);
         const dw = vw * scale, dh = vh * scale;
@@ -124,8 +142,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const box = { x, y, width: w, height: h };
         // NaN·Infinity 가 섞이면 JSON 에서 null 이 되어 서버가 오류를 낸다 → 아예 안 보낸다
         const ok = Object.values(box).every(v => Number.isFinite(v)) && w > 0.01 && h > 0.01;
-        if (!ok) { console.warn('가이드 박스 좌표를 계산하지 못해 자동 탐지로 넘깁니다.', box); return null; }
+        if (!ok) { console.warn('가이드 박스 좌표를 계산하지 못했습니다.', elId, box); return null; }
         return box;
+    }
+
+    // 얼굴 가이드 영역만 잘라내기 (좌표 계산 실패 시 중앙 정사각형으로 대체)
+    function cropToCanvas(src, c) {
+        let sx, sy, sw, sh;
+        if (c) {
+            sx = c.x * src.width;  sy = c.y * src.height;
+            sw = c.width * src.width; sh = c.height * src.height;
+        } else {
+            sw = sh = Math.min(src.width, src.height);
+            sx = (src.width - sw) / 2; sy = (src.height - sh) / 2;
+        }
+        const out = document.createElement('canvas');
+        out.width = Math.round(sw); out.height = Math.round(sh);
+        out.getContext('2d').drawImage(src, sx, sy, sw, sh, 0, 0, out.width, out.height);
+        return out;
     }
 
     // 2-1. 촬영 조건 미달 → 촬영 화면으로 돌아가며 이유를 알려준다
@@ -147,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 4. 다시 검사하기
     resetBtn.addEventListener('click', () => {
         resultSection.classList.add('hidden');
+        previewSection.classList.add('hidden');
         webcamSection.classList.remove('hidden');
     });
 
@@ -191,7 +226,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderSeasonGuide(data.best_group);
 
-
         // 웜/쿨 판정 — 4계절보다 신뢰도가 높은 주 결과
         const tone = data.tone || {};
         document.getElementById('tone-line').innerHTML =
@@ -199,10 +233,82 @@ document.addEventListener('DOMContentLoaded', async () => {
             `<br><span class="tone-sub">${data.message ?? ''}</span>`;
 
         // 조명 보정 비교 — CSS 효과가 아니라 백엔드가 실제로 보정한 사진을 쓴다
-
         document.getElementById('img-original').src = imageUrl;
         const corrected = document.getElementById('img-corrected');
         corrected.style.filter = '';
         corrected.src = data.corrected_image || imageUrl;
     }
+
+    // ===== 6. 시즌 컬러 휠에 내 얼굴 합성 =====
+    const imgCache = {};
+    function loadImage(src) {
+        if (imgCache[src]) return Promise.resolve(imgCache[src]);
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => { imgCache[src] = img; resolve(img); };
+            img.onerror = () => reject(new Error('시즌 이미지를 불러오지 못했습니다: ' + src));
+            img.src = src;
+        });
+    }
+
+    // 시즌 이미지 위 회색 타원에 얼굴을 꽉 차게 합성
+    async function renderPreview(key) {
+        const info = PREVIEW_IMAGES[key];
+        if (!info || !faceCanvas) return;
+        const bg = await loadImage('/static/images/' + encodeURIComponent(info.file));
+
+        previewCanvas.width = bg.naturalWidth;
+        previewCanvas.height = bg.naturalHeight;
+        const ctx = previewCanvas.getContext('2d');
+        ctx.drawImage(bg, 0, 0);
+
+        const k = bg.naturalWidth / OVAL.size;
+        const cx = OVAL.cx * k, cy = OVAL.cy * k, rx = OVAL.rx * k, ry = OVAL.ry * k;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.clip();
+        // cover 방식: 타원을 빈틈없이 채우고 넘치는 부분은 잘림
+        const s = Math.max((rx * 2) / faceCanvas.width, (ry * 2) / faceCanvas.height);
+        const dw = faceCanvas.width * s, dh = faceCanvas.height * s;
+        ctx.drawImage(faceCanvas, cx - dw / 2, cy - dh / 2, dw, dh);
+        ctx.restore();
+
+        currentSeason = key;
+        document.getElementById('preview-title').textContent = info.label + ' 컬러 확인';
+        document.querySelectorAll('#preview-section .season-pick-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.season === key));
+    }
+
+    async function openPreview(key) {
+        try {
+            await renderPreview(key);
+            resultSection.classList.add('hidden');
+            previewSection.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    // 시즌 버튼 (결과 화면 + 합성 화면 공용)
+    document.querySelectorAll('.season-pick-btn').forEach(btn => {
+        btn.addEventListener('click', () => openPreview(btn.dataset.season));
+    });
+
+    document.getElementById('preview-back-btn').addEventListener('click', () => {
+        previewSection.classList.add('hidden');
+        resultSection.classList.remove('hidden');
+    });
+
+    document.getElementById('preview-save-btn').addEventListener('click', () => {
+        previewCanvas.toBlob(blob => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `personal-color-${currentSeason}.png`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }, 'image/png');
+    });
 });

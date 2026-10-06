@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
     
     <!-- 분리된 외부 CSS 파일 연결 -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
 </head>
 <body>
     <div class="app-container">
@@ -107,8 +107,36 @@
                 </div>
             </div>
 
+            <!-- 내 얼굴로 시즌 컬러 확인 -->
+            <div class="card preview-pick-card">
+                <h2>내 얼굴로 시즌 컬러 확인</h2>
+                <p>시즌을 누르면 내 얼굴이 합성된 컬러 휠을 볼 수 있어요.</p>
+                <div class="season-btn-grid">
+                    <button class="season-pick-btn" data-season="spring">봄 웜</button>
+                    <button class="season-pick-btn" data-season="summer">여름 쿨</button>
+                    <button class="season-pick-btn" data-season="autumn">가을 웜</button>
+                    <button class="season-pick-btn" data-season="winter">겨울 쿨</button>
+                </div>
+            </div>
+
             <div class="mt-20">
                 <button id="reset-btn" class="btn-secondary">다시 검사하기</button>
+            </div>
+        </section>
+
+        <!-- 합성 미리보기 (별도 화면) -->
+        <section id="preview-section" class="card hidden">
+            <h2 id="preview-title">시즌 컬러 확인</h2>
+            <div class="season-btn-grid preview-tabs">
+                <button class="season-pick-btn" data-season="spring">봄 웜</button>
+                <button class="season-pick-btn" data-season="summer">여름 쿨</button>
+                <button class="season-pick-btn" data-season="autumn">가을 웜</button>
+                <button class="season-pick-btn" data-season="winter">겨울 쿨</button>
+            </div>
+            <canvas id="preview-canvas" class="preview-canvas"></canvas>
+            <div class="preview-actions">
+                <button id="preview-save-btn" class="btn-primary">이미지 저장</button>
+                <button id="preview-back-btn" class="btn-secondary">결과로 돌아가기</button>
             </div>
         </section>
     </div>
