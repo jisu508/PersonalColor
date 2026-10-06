@@ -12,6 +12,8 @@
     
     <!-- 분리된 외부 CSS 파일 연결 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
+    <!-- 실시간 디지털 드레이핑 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='draping.css') }}?v=1">
 </head>
 <body>
     <div class="app-container">
@@ -120,6 +122,7 @@
             </div>
 
             <div class="mt-20">
+                <button id="draping-btn" class="btn-primary">디지털 드레이핑</button>
                 <button id="reset-btn" class="btn-secondary">다시 검사하기</button>
             </div>
         </section>
@@ -143,5 +146,6 @@
     
     <!-- JS 파일 연동 -->
     <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="{{ url_for('static', filename='draping.js') }}?v=1"></script>
 </body>
 </html>

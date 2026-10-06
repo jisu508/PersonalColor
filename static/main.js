@@ -178,6 +178,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         webcamSection.classList.remove('hidden');
     }
 
+    // 4-1. 디지털 드레이핑 — 결과 시즌을 넘기면 그 배경으로 카메라가 열린다
+    let lastBestGroup = '';
+    const drapingBtn = document.getElementById('draping-btn');
+    if (drapingBtn) {
+        drapingBtn.addEventListener('click', () => openDraping(lastBestGroup));
+    }
+
     // 4. 다시 검사하기
     resetBtn.addEventListener('click', () => {
         resultSection.classList.add('hidden');
@@ -223,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }));
 
         document.getElementById('best-season-name').textContent = data.best_group;
+        lastBestGroup = data.best_group || '';        // 드레이핑 버튼이 쓸 시즌
 
         renderSeasonGuide(data.best_group);
 

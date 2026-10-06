@@ -1,0 +1,26 @@
+/* ── 실시간 디지털 드레이핑 ───────────────────────────────── */
+.draping-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 20, 24, 0.82);
+    backdrop-filter: blur(4px);
+}
+.draping-modal.hidden { display: none; }
+.draping-inner { text-align: center; }
+#draping-canvas {
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    background: #111;
+}
+.draping-hint { color: #e8e8ea; font-size: 0.95rem; margin: 14px 0 10px; }
+.draping-seasons { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
+.draping-season {
+    padding: 8px 20px; border-radius: 999px; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: transparent; color: #fff; font-size: 1rem; font-family: inherit;
+    transition: background .15s, color .15s;
+}
+.draping-season:hover { background: rgba(255, 255, 255, 0.15); }
+.draping-season.on { background: #fff; color: #222; border-color: #fff; font-weight: 700; }
+.draping-actions { display: flex; gap: 10px; justify-content: center; }
+.draping-actions button { min-width: 120px; }
