@@ -21,7 +21,7 @@ body {
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 48px 20px 64px;
+    padding: 96px 20px 64px;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
     word-break: keep-all;
@@ -319,4 +319,130 @@ video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 @media (prefers-reduced-motion: reduce) {
     .result-container { animation: none; }
     .bar-fill { transition: none; }
+}
+
+/* =====================================================================
+   사이트 느낌 레이어 (네비 / 히어로 / 진단 방법 / 푸터 / 등장 효과 / 시즌 테마)
+   ===================================================================== */
+html { scroll-behavior: smooth; }
+section[id], header[id] { scroll-margin-top: 90px; }
+:root { --accent: #f2799d; }
+
+/* 네비게이션 */
+.site-nav {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    width: min(720px, calc(100% - 24px));
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 10px 20px;
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.9);
+    border-radius: 999px;
+    box-shadow: 0 8px 28px rgba(166,139,245,0.16), 0 0 0 1px var(--line);
+    z-index: 100;
+}
+.brand {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'Jua', sans-serif; font-size: 1.15rem;
+    color: var(--ink); text-decoration: none; letter-spacing: 1px;
+}
+.brand-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: conic-gradient(#ff8a65, #ffd54f, #4db6ac, #7e8ce0, #f2799d, #ff8a65);
+}
+.nav-links { display: flex; align-items: center; gap: 18px; }
+.nav-links a { color: var(--ink-soft); text-decoration: none; font-size: 0.92rem; transition: color .2s; }
+.nav-links a:hover { color: var(--ink); }
+.nav-links .nav-cta {
+    color: #fff; padding: 8px 16px; border-radius: 999px;
+    background: linear-gradient(120deg, var(--rose), var(--lilac));
+}
+.nav-links .nav-cta:hover { color: #fff; }
+
+/* 히어로 */
+.hero { padding: 28px 0 8px; }
+.hero-chip {
+    display: inline-block; padding: 6px 14px; margin-bottom: 18px;
+    font-size: 0.82rem; color: var(--ink);
+    background: rgba(255,255,255,0.8); border-radius: 999px;
+    box-shadow: 0 0 0 1px var(--line);
+}
+.hero h1 { font-size: 3rem; line-height: 1.25; margin-bottom: 16px; }
+.hero p { line-height: 1.7; max-width: 540px; margin: 0 auto 26px; }
+.hero-cta {
+    display: inline-block; padding: 16px 34px; border-radius: 999px;
+    color: #fff; text-decoration: none; font-size: 1.05rem;
+    background: linear-gradient(120deg, var(--rose), var(--lilac));
+    box-shadow: 0 14px 28px -8px rgba(198,120,200,0.55);
+    transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s;
+}
+.hero-cta:hover { transform: translateY(-3px); box-shadow: 0 18px 32px -8px rgba(198,120,200,0.65); }
+.hero-swatches { display: flex; justify-content: center; gap: 10px; margin-top: 30px; }
+.hero-swatches span {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--c);
+    border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    animation: float 4s ease-in-out infinite;
+}
+.hero-swatches span:nth-child(2) { animation-delay: .4s; }
+.hero-swatches span:nth-child(3) { animation-delay: .8s; }
+.hero-swatches span:nth-child(4) { animation-delay: 1.2s; }
+@keyframes float { 50% { transform: translateY(-8px); } }
+
+/* 진단 방법 3단계 */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.step {
+    background: rgba(255,255,255,0.78); border-radius: 24px; padding: 22px 16px;
+    text-align: center; box-shadow: var(--shadow), 0 0 0 1px var(--line);
+    transition: transform .3s cubic-bezier(.22,1,.36,1);
+}
+.step:hover { transform: translateY(-4px); }
+.step b {
+    display: inline-grid; place-items: center; width: 34px; height: 34px;
+    border-radius: 50%; margin-bottom: 12px; color: #fff; font-family: 'Jua', sans-serif; font-weight: 400;
+    background: linear-gradient(120deg, var(--rose), var(--lilac));
+}
+.step h3 { font-family: 'Jua', sans-serif; font-weight: 400; font-size: 1.05rem; margin-bottom: 6px; }
+.step p { font-size: 0.85rem; color: var(--ink-soft); line-height: 1.5; }
+
+/* 푸터 */
+.site-footer { text-align: center; padding: 28px 0 0; color: var(--ink-soft); font-size: 0.85rem; }
+.foot-sub { margin-top: 6px; font-size: 0.78rem; opacity: .8; }
+
+/* 카드 호버 + 스크롤 등장 (등장 transition 이 카드 호버를 덮어쓰지 않게 한 곳에서 관리) */
+.card:hover { box-shadow: 0 20px 48px rgba(242,121,157,0.18), 0 0 0 1px var(--line); }
+.reveal {
+    opacity: 0; transform: translateY(24px);
+    transition: opacity .7s ease, transform .7s cubic-bezier(.22,1,.36,1), box-shadow .35s;
+}
+.reveal.in { opacity: 1; transform: none; }
+
+/* 결과: 시즌별 테마색 (JS 가 --accent 를 바꿔준다) */
+.best-color-card {
+    background:
+        radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--accent) 30%, white) 0%, transparent 60%),
+        linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--accent) 14%, white) 100%);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, white);
+    position: relative; overflow: hidden;
+}
+.best-color-card::after {          /* 한 번 훑고 지나가는 빛 */
+    content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.7), transparent);
+    animation: shine 2.4s .6s ease-out 1;
+    pointer-events: none;
+}
+@keyframes shine { to { left: 130%; } }
+
+/* 드레이핑 카드 */
+.draping-card .btn-primary { margin-top: 4px; }
+
+@media (max-width: 480px) {
+    .hero h1 { font-size: 2.2rem; }
+    .steps { grid-template-columns: 1fr; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    .pc-only { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .hero-swatches span, .best-color-card::after { animation: none; }
+    html { scroll-behavior: auto; }
 }

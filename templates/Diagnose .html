@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>진단하기 · COLORY</title>
+    <meta name="description" content="웹캠으로 촬영하고 AI 퍼스널컬러 진단 결과를 확인하세요.">
+    <meta name="theme-color" content="#fff7fa">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+
+    <!-- 폰트 적용 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+
+    <!-- 외부 CSS (캐시 때문에 수정할 때마다 v 숫자를 올리세요) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
+    <link rel="stylesheet" href="{{ url_for('static', filename='draping.css') }}?v=2">
+</head>
+<body>
+    <!-- 상단 네비게이션 -->
+    <nav class="site-nav">
+        <a class="brand" href="{{ url_for('home') }}"><span class="brand-dot"></span>COLORY</a>
+        <div class="nav-links">
+            <a href="{{ url_for('home') }}">← 홈</a>
+            <a href="#webcam-section" class="nav-cta">무료 진단</a>
+        </div>
+    </nav>
+
+    <div class="app-container">
+        <!-- 웹캠 촬영 섹션 -->
+        <section id="webcam-section" class="card">
+            <h2>사진 촬영</h2>
+            <p>얼굴을 가운데 타원에 맞추고, 흰 종이를 오른쪽 박스에 맞춰주세요.</p>
+
+            <div class="video-container">
+                <video id="webcam-video" autoplay playsinline></video>
+                <div id="face-guide" class="face-guide">
+                    <svg viewBox="0 0 200 257" preserveAspectRatio="none" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6">
+                        <!-- 머리 -->
+                        <path d="M100 8 C150 8 172 60 170 120 C168 190 140 249 100 249 C60 249 32 190 30 120 C28 60 50 8 100 8 Z"/>
+                        <!-- 귀 -->
+                        <path d="M31 112 C14 110 12 145 32 150"/>
+                        <path d="M169 112 C186 110 188 145 168 150"/>
+                        <!-- 눈/코/입 위치 가이드 -->
+                        <g stroke-dasharray="3 6" stroke="rgba(255,255,255,0.45)" stroke-width="1.5">
+                            <path d="M48 110 L152 110"/>
+                            <path d="M100 24 L100 236"/>
+                            <path d="M78 185 L122 185"/>
+                        </g>
+                    </svg>
+                    <span>얼굴을 맞춰주세요</span>
+                </div>
+                <div id="guide-box" class="guide-box">
+                    <span>흰 종이 인식 영역</span>
+                </div>
+            </div>
+
+            <button id="capture-btn" class="btn-primary">촬영 및 진단 시작</button>
+            <canvas id="snapshot-canvas" hidden></canvas>
+        </section>
+
+        <!-- 로딩 화면 -->
+        <section id="loading-section" class="card hidden">
+            <div class="spinner"></div>
+            <h2>분석 중입니다</h2>
+            <p>조명 보정 및 피부 톤/색상을 추출하고 있습니다...</p>
+        </section>
+
+        <!-- 결과 화면 -->
+        <section id="result-section" class="hidden result-container">
+            <div class="result-header-bg">
+                <div class="profile-reliability">
+                    <img id="result-profile-img" src="" alt="프로필 사진">
+                    <div class="reliability-info">
+                        <h3 id="reliability-text">신뢰도: 측정 중...</h3>
+                        <p id="reliability-desc">분석 중</p>
+                    </div>
+                </div>
+
+                <div class="diagnosis-card">
+                    <h2>퍼스널컬러 진단 결과</h2>
+                    <ul class="percentage-list" id="percentage-list"></ul>
+                </div>
+
+                <div class="best-color-card" id="best-color-card">
+                    <p class="best-title">Best Season</p>
+                    <h2 class="best-season" id="best-season-name">분석 중</h2>
+                    <p class="tone-line" id="tone-line"></p>
+                </div>
+            </div>
+
+            <!-- 조명 자동 보정 검증 -->
+            <div class="card correction-card">
+                <h2>조명 보정 (White Balancing)</h2>
+                <div class="image-comparison">
+                    <div class="img-box">
+                        <span class="badge">원본</span>
+                        <img id="img-original" src="" alt="원본 사진">
+                    </div>
+                    <div class="img-box">
+                        <span class="badge">보정 후</span>
+                        <img id="img-corrected" src="" alt="보정된 사진">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 진단 결과별 시즌 가이드 사진 (main.js에서 결과에 따라 채워짐) -->
+            <div class="card season-guide-card" id="season-guide-card">
+                <h2 id="season-guide-title">시즌 컬러 가이드</h2>
+                <div class="season-guide-images">
+                    <img id="season-guide-style" src="" alt="시즌 스타일 가이드">
+                    <img id="season-guide-makeup" src="" alt="시즌 화장품 가이드">
+                    <img id="season-guide-clothes" src="" alt="시즌 의류 가이드">
+                </div>
+            </div>
+
+            <!-- 실시간 디지털 드레이핑 (draping.js) -->
+            <div class="card draping-card">
+                <h2>실시간 디지털 드레이핑</h2>
+                <p>카메라를 켜고 시즌 컬러 휠 위에서 내 얼굴을 실시간으로 확인해보세요.</p>
+                <button id="draping-btn" class="btn-primary" type="button">드레이핑 시작하기</button>
+            </div>
+
+            <!-- 내 얼굴로 시즌 컬러 확인 -->
+            <div class="card preview-pick-card">
+                <h2>내 얼굴로 시즌 컬러 확인</h2>
+                <p>시즌을 누르면 내 얼굴이 합성된 컬러 휠을 볼 수 있어요.</p>
+                <div class="season-btn-grid">
+                    <button class="season-pick-btn" data-season="spring">봄 웜</button>
+                    <button class="season-pick-btn" data-season="summer">여름 쿨</button>
+                    <button class="season-pick-btn" data-season="autumn">가을 웜</button>
+                    <button class="season-pick-btn" data-season="winter">겨울 쿨</button>
+                </div>
+            </div>
+
+            <div class="mt-20">
+                <button id="reset-btn" class="btn-secondary">다시 검사하기</button>
+            </div>
+        </section>
+
+        <!-- 합성 미리보기 (별도 화면) -->
+        <section id="preview-section" class="card hidden">
+            <h2 id="preview-title">시즌 컬러 확인</h2>
+            <div class="season-btn-grid preview-tabs">
+                <button class="season-pick-btn" data-season="spring">봄 웜</button>
+                <button class="season-pick-btn" data-season="summer">여름 쿨</button>
+                <button class="season-pick-btn" data-season="autumn">가을 웜</button>
+                <button class="season-pick-btn" data-season="winter">겨울 쿨</button>
+            </div>
+            <canvas id="preview-canvas" class="preview-canvas"></canvas>
+            <div class="preview-actions">
+                <button id="preview-save-btn" class="btn-primary">이미지 저장</button>
+                <button id="preview-back-btn" class="btn-secondary">결과로 돌아가기</button>
+            </div>
+        </section>
+
+        <!-- 푸터 -->
+        <footer class="site-footer">
+            <p>© 2026 COLORY · AI 퍼스널컬러 진단</p>
+            <p class="foot-sub">촬영한 사진은 진단에만 사용돼요.</p>
+        </footer>
+    </div>
+
+    <!-- JS 파일 연동 -->
+    <script src="{{ url_for('static', filename='draping.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='main.js') }}?v=12"></script>
+</body>
+</html>

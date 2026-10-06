@@ -1,7 +1,8 @@
 """
-Flask 서버 — 웹캠 촬영 화면 + 진단 API
+Flask 서버 — 메인 화면 + 촬영·진단 화면 + 진단 API
 
-  GET  /               촬영 화면 (templates/index.html)
+  GET  /               메인 화면 (templates/index.html)
+  GET  /diagnose       촬영·진단 화면 (templates/diagnose.html)
   POST /api/diagnose   사진(+흰 종이 가이드 박스 좌표) → 진단 결과 JSON
 
 진단 계산은 전부 backend/ 안에 있고, 여기서는 run_pipeline() 하나만 부른다.
@@ -102,6 +103,13 @@ def _to_data_url(img_bgr) -> str | None:
 @app.route('/')
 def home():
     return render_template('index.html')
+
+
+# 1-0. 촬영·진단 화면 — 메인의 '무료 진단' / '지금 진단하기' 버튼이 여기로 넘어온다.
+#      (함수 이름을 diagnose_page 로 둔 이유: 아래 API 함수 diagnose 와 이름이 겹치면 Flask 가 오류를 낸다)
+@app.route('/diagnose')
+def diagnose_page():
+    return render_template('diagnose.html')
 
 
 # 1-1. 브라우저가 자동으로 찾는 아이콘 — 없으면 콘솔에 빨간 404 가 뜨므로 빈 응답을 준다

@@ -233,6 +233,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         lastBestGroup = data.best_group || '';        // 드레이핑 버튼이 쓸 시즌
 
         renderSeasonGuide(data.best_group);
+        applySeasonTheme(data.best_group);
+        listContainer.querySelectorAll('.percentage-value').forEach((el, i) =>
+            countUp(el, Number(data.percentages[i].value)));
 
         // 웜/쿨 판정 — 4계절보다 신뢰도가 높은 주 결과
         const tone = data.tone || {};
@@ -318,5 +321,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             a.click();
             URL.revokeObjectURL(a.href);
         }, 'image/png');
+    });
+
+    // ===== 7. 사이트 느낌: 스크롤 등장 / 시즌 테마색 / 숫자 카운트 / 로딩 문구 =====
+    const io = new IntersectionObserver(entries => entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }), { threshold: 0.12 });
+    document.querySelectorAll('.reveal, .result-container > .card, .result-container > .result-header-bg')
+        .forEach(el => { el.classList.add('reveal'); io.observe(el); });
+
+    const SEASON_ACCENT = { '봄': '#ff8a65', '여름': '#8fa8e8', '가을': '#c77a2b', '겨울': '#4a5bc4' };
+    function applySeasonTheme(bestGroup) {
+        const k = Object.keys(SEASON_ACCENT).find(s => String(bestGroup).includes(s));
+        document.documentElement.style.setProperty('--accent', k ? SEASON_ACCENT[k] : '#f2799d');
+    }
+
+    function countUp(el, to, ms = 1000) {
+        if (!Number.isFinite(to)) return;
+        const t0 = performance.now();
+        const step = now => {
+            const p = Math.min(1, (now - t0) / ms);
+            el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))) + '%';
+            if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    }
+
+    // 로딩 중에는 안내 문구가 돌아가며 바뀜
+    const loadMsgs = ['흰 종이로 조명 색을 보정하고 있어요...', '피부 톤을 추출하고 있어요...',
+                      '웜/쿨 언더톤을 판정하고 있어요...', '4계절 확률을 계산하고 있어요...'];
+    let loadTimer = null;
+    new MutationObserver(() => {
+        const p = loadingSection.querySelector('p');
+        clearInterval(loadTimer);
+        if (!p || loadingSection.classList.contains('hidden')) return;
+        let i = 0; p.textContent = loadMsgs[0];
+        loadTimer = setInterval(() => { i = (i + 1) % loadMsgs.length; p.textContent = loadMsgs[i]; }, 1600);
+    }).observe(loadingSection, { attributes: true, attributeFilter: ['class'] });
+
+    // 결과 화면을 보고 있을 때 '무료 진단'/'지금 진단하기'를 누르면 촬영 화면으로 돌아간다
+    document.querySelectorAll('a[href="#webcam-section"]').forEach(a => {
+        a.addEventListener('click', () => {
+            if (webcamSection.classList.contains('hidden') && loadingSection.classList.contains('hidden')) {
+                resetBtn.click();
+            }
+        });
     });
 });
