@@ -24,3 +24,7 @@
 .draping-season.on { background: #fff; color: #222; border-color: #fff; font-weight: 700; }
 .draping-actions { display: flex; gap: 10px; justify-content: center; }
 .draping-actions button { min-width: 120px; }
+
+/* '전체' 버튼은 시즌 버튼과 구분되게 */
+.draping-all { margin-left: 10px; border-color: rgba(255,255,255,.7); font-weight: 600; }
+.draping-all::before { content: '⊞ '; }

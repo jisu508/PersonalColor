@@ -51,10 +51,11 @@
     wrap.innerHTML = `
       <div class="draping-inner">
         <canvas id="draping-canvas"></canvas>
-        <p class="draping-hint">타원 안에 얼굴을 맞추고, 아래 버튼으로 시즌을 바꿔보세요</p>
+        <p class="draping-hint">타원 안에 얼굴을 맞추세요 · <b>전체</b>를 누르면 네 시즌을 한 번에 비교할 수 있습니다</p>
         <div class="draping-seasons">
           ${SEASONS.map((s, i) =>
             `<button data-i="${i}" class="draping-season">${s.key}</button>`).join('')}
+          <button data-i="-1" class="draping-season draping-all">전체</button>
         </div>
         <div class="draping-actions">
           <button id="draping-shot" class="btn-primary">사진 저장</button>
@@ -80,25 +81,43 @@
   }
 
   function select(i) {
-    current = i;
-    document.querySelectorAll('.draping-season').forEach((b, k) =>
-      b.classList.toggle('on', k === i));
-    loadImage(SEASONS[i].img).catch(err => console.warn(err.message));
+    current = i;                                  // -1 = 네 개 한 번에 보기
+    document.querySelectorAll('.draping-season').forEach(b =>
+      b.classList.toggle('on', Number(b.dataset.i) === i));
+    if (i < 0) SEASONS.forEach(s => loadImage(s.img).catch(() => {}));
+    else loadImage(SEASONS[i].img).catch(err => console.warn(err.message));
   }
 
   // ── 매 프레임 그리기 ───────────────────────────────────────────
   function draw() {
     raf = requestAnimationFrame(draw);
-    const bg = images[SEASONS[current].img];
-    if (!bg || !video.videoWidth) return;
-
+    if (!video.videoWidth) return;
     const S = canvas.width;                       // 정사각형 캔버스
     ctx.clearRect(0, 0, S, S);
-    ctx.drawImage(bg, 0, 0, S, S);                // ① 배경(컬러 팬)
 
+    if (current < 0) {                            // 전체 보기 — 2×2 로 네 개를 동시에
+      const h = S / 2;
+      SEASONS.forEach((s, i) => {
+        const ox = (i % 2) * h, oy = Math.floor(i / 2) * h;
+        drawOne(images[s.img], ox, oy, h);
+      });
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(S / 2, 0); ctx.lineTo(S / 2, S);
+      ctx.moveTo(0, S / 2); ctx.lineTo(S, S / 2);
+      ctx.stroke();
+    } else {
+      drawOne(images[SEASONS[current].img], 0, 0, S);
+    }
+  }
+
+  // 배경 한 칸 + 그 안 타원에 얼굴
+  function drawOne(bg, ox, oy, size) {
+    if (!bg) return;
+    ctx.drawImage(bg, ox, oy, size, size);        // ① 배경(컬러 팬)
     const rect = {                                // ② 얼굴 들어갈 타원
-      cx: OVAL.cx * S, cy: OVAL.cy * S,
-      rx: OVAL.rx * S, ry: OVAL.ry * S,
+      cx: ox + OVAL.cx * size, cy: oy + OVAL.cy * size,
+      rx: OVAL.rx * size, ry: OVAL.ry * size,
     };
     ctx.save();
     ctx.beginPath();
@@ -161,7 +180,7 @@
 
   function snapshot() {
     const a = document.createElement('a');
-    a.download = `드레이핑_${SEASONS[current].key}.png`;
+    a.download = `드레이핑_${current < 0 ? '전체' : SEASONS[current].key}.png`;
     a.href = canvas.toDataURL('image/png');
     a.click();
   }
