@@ -20,3 +20,7 @@ data/collected/
 
 # 웹에서 촬영한 기록 (사람 얼굴이라 깃에 올리지 않는다)
 data/captures/
+
+# 라벨링·기준 사진도 사람 얼굴이라 올리지 않는다
+data/anchor/
+data/labeling/
