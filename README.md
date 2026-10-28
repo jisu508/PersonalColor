@@ -1,266 +1,356 @@
 # 근거를 보여주는 AI 퍼스널컬러 진단
 
-수원대 정보보호학과 · 시스템보안프로젝트 2026-2학기 (4인 팀)
+수원대학교 정보보호학과 · 시스템보안프로젝트 2026-2학기
 
-사진/웹캠으로 퍼스널컬러(봄웜·여름쿨·가을웜·겨울쿨)를 **퍼센티지**로 진단하는 로컬 웹 서비스.
+웹캠으로 얼굴을 찍으면 **봄웜 · 여름쿨 · 가을웜 · 겨울쿨**을 퍼센티지로 알려주는 로컬 웹 서비스입니다.
+외부 API도, 데이터베이스도 쓰지 않습니다. 사진은 서버 밖으로 나가지 않습니다.
 
-| 차별점 | 내용 |
+## 이 프로젝트가 다른 점
+
+보통의 퍼스널컬러 앱은 "당신은 가을웜입니다" 하고 끝납니다. 왜 그런지는 알 수 없습니다.
+이 프로젝트는 **판단의 근거를 전부 보여줍니다.**
+
+| | 내용 |
 |---|---|
-| ① 조명 보정 | 사진 속 흰 종이를 흰색(255) 기준으로 화이트밸런스 → 조명이 달라도 일관된 색 |
-| ② 퍼센티지 | "겨울쿨"이라 단정하지 않고 시즌별 % 로 표시 |
-| ③ 신뢰도 | 사진 품질 + 결과 명확도로 0~100% 신뢰도 표시 |
-
-외부 API·DB 없음. 모든 처리는 로컬 Python (OpenCV · MediaPipe · NumPy · Flask).
-
----
-
-## 1. 폴더 구조와 담당
-
-```
-personal_color/
-├── README.md                  ← 지금 이 문서                              [문서]
-├── requirements.txt           ← 설치할 라이브러리 목록
-├── .gitignore                 ← 사진·결과물은 GitHub에 안 올라가게
-│
-├── backend/                   ← 진단 로직 전부 (웹과 무관한 순수 Python)
-│   ├── color_utils.py         공용: BGR→Lab 변환, 영역 평균색, ΔE 거리    [공용]
-│   ├── image_io.py            공용: 한글 경로 안전한 사진 읽기/저장        [공용]
-│   ├── vision/                ── 사진 → 색 숫자 ──                        [영상처리]
-│   │   ├── lighting.py        ✅ 2단계  흰 종이 기준 조명 보정
-│   │   ├── paper.py           ✅ 흰 종이 자동 검출 (웹 가이드 박스 좌표도 처리)
-│   │   ├── landmarks.py       ✅ 3단계  MediaPipe 얼굴 478점(홍채 포함) 검출
-│   │   └── face_color.py      ✅ 3단계  볼·이마·홍채 → 피부·눈 Lab (머리는 2주차)
-│   ├── diagnosis/             ── 색 숫자 → 판정 ──                        [알고리즘]
-│   │   ├── season.py          ✅ 4단계  웜/쿨 판정(3가지 방법) → 4계절 퍼센티지
-│   │   └── confidence.py      ✅ 5단계  신뢰도 0~100%
-│   └── pipeline.py            ✅ 6단계  사진 → 결과 dict (위 모듈 연결)
-│
-├── web/                       ⬜ 7단계  Flask + getUserMedia 촬영 화면    [웹]
-│   ├── templates/  static/js/  static/css/
-│
-├── models/                    MediaPipe 모델 파일 (face_landmarker.task, 레포에 포함)
-│
-├── data/
-│   ├── reference/             시즌 기준표 JSON (4단계)                    [알고리즘]
-│   └── samples/               테스트 사진 (GitHub 업로드 금지)
-│
-├── tools/                     사람이 직접 돌려보는 확인용 스크립트
-│   ├── find_coords.py         사진 클릭 → 좌표 박스 출력 (구 find_coords.py)
-│   ├── check_lighting.py      조명 보정 전/후 비교 (구 check2.py)
-│   ├── draw_landmarks.py      얼굴 478점이 제대로 잡히는지 그려보기
-│   ├── check_face_color.py    부위별 색 자동 추출 + 두 사진 비교
-│   ├── batch_extract.py       폴더 안 사진 여러 장 → Lab CSV (기준표 재료용)
-│   └── fit_threshold.py       라벨 붙은 사진 → 웜/쿨 경계값·정확도 계산
-│
-├── tests/                     자동 테스트 (pytest)                        [테스트]
-│   ├── test_lighting.py
-│   ├── test_face_color.py
-│   └── test_season.py
-├── notebooks/                 Jupyter 실험 (기준표 튜닝 등)
-├── docs/                      일정표·데이터 형식·기준표 계획(reference_table_plan.md)  [문서]
-└── outputs/                   실행 결과 이미지 (자동 생성, 커밋 X)
-```
-
-### 모듈 규칙 (파트끼리 안 부딪히기 위한 약속)
-
-1. **`vision/` ↔ `diagnosis/` 는 서로 import 하지 않는다.** 둘을 잇는 곳은 `pipeline.py` 하나.
-   → 알고리즘 파트는 사진 없이 Lab 숫자만으로 테스트·튜닝할 수 있다.
-2. **`web/` 은 계산하지 않는다.** `backend.pipeline.run_pipeline()` 만 호출.
-3. **숫자(기준값·임계값)는 코드에 흩뿌리지 않는다.** 기준표는 `data/reference/*.json`,
-   품질 임계값은 각 모듈 상단 `THRESHOLDS` 에 모아둔다.
-4. 사진 읽기/저장은 `cv2.imread` 대신 `backend.image_io.imread / imwrite` (Windows 한글 경로 문제).
-
-### 데이터 흐름
-
-```
-[웹캠 촬영] → lighting.white_balance → face_color.extract_face_colors
-            → season.diagnose_season → confidence.compute_confidence → [결과 화면]
-```
+| **조명을 먼저 지웁니다** | 사진 속 흰 종이를 자로 삼아 조명 색을 걷어냅니다. 보정 전후 사진을 나란히 보여줍니다 |
+| **단정하지 않습니다** | "겨울쿨"이 아니라 "웜 38% / 쿨 62%" 처럼 퍼센티지로 말합니다 |
+| **못 믿을 땐 못 믿는다고 합니다** | 사진 품질이 나쁘면 판정 대신 "다시 찍어주세요 + 이유"를 보여줍니다 |
+| **숫자의 출처가 있습니다** | 모든 기준값이 JSON 한 곳에 있고, 값마다 `_근거` 가 붙어 있습니다 |
 
 ---
 
-## 2. 설치 (Windows PowerShell 기준, 처음 한 번만)
+## 빠른 시작
 
-Python 3.9 이상 필요 (`python --version` 으로 확인).
-
-```powershell
-# (1) 코드 받기
+```
 git clone https://github.com/jisu508/PersonalColor.git
 cd PersonalColor
-
-# (2) 라이브러리 설치
 python -m pip install -r requirements.txt
-
-# (3) 설치 확인 — 사진이 없으면 "17 passed, 6 skipped" 가 정상
-#     사진까지 넣으면 23 passed (MediaPipe 가 W0000 ... 로그를 출력하는데 오류 아님)
-python -m pytest tests -v
+python -m pytest tests -q          # 47 passed 가 나오면 준비 끝
+python app.py                      # → http://127.0.0.1:5000
 ```
 
-<details>
-<summary>가상환경(.venv)을 쓰고 싶다면 (선택)</summary>
+브라우저에서 열고 카메라 권한을 허용한 뒤, **흰 A4 용지를 얼굴 옆 가이드 박스에 맞춰 들고** 촬영합니다.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1          # 맥/리눅스: source .venv/bin/activate
-python -m pip install -r requirements.txt
+---
+
+## 어떻게 동작하나
+
 ```
-"스크립트를 실행할 수 없습니다" 오류가 나면 한 번만 실행 후 다시 활성화:
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-</details>
-
-### 테스트 사진 넣기 (필수)
-
-인물 사진은 개인정보라 **GitHub에 올리지 않습니다** (`.gitignore` 처리).
-팀 드라이브/카톡에서 `photo1.jpg`, `photo3.jpg` 를 받아 **`data/samples/` 폴더에 직접 넣으세요.**
-
-```powershell
-# 예) 사진이 바탕화면\시보프\1차발표 에 있을 때
-Copy-Item "$HOME\Desktop\시보프\1차발표\photo1.jpg", "$HOME\Desktop\시보프\1차발표\photo3.jpg" data\samples\
-dir data\samples          # photo1.jpg, photo3.jpg 가 보이면 OK
+사진 1장
+  ① 흰 종이 찾기       paper.py       ← 웹 가이드 박스 좌표 또는 자동 검출
+  ② 조명 보정          lighting.py    ← 종이를 기준으로 B·G·R 배율 보정
+  ③ 얼굴 색 추출        face_color.py  ← MediaPipe 478점 → 양 볼 절사평균
+  ④ 촬영 조건 점검      pipeline.py    ← 못 맞추면 재촬영 안내
+  ⑤ 웜/쿨 판정         season.py      ← 색상각 h 로 판정
+  ⑥ 4계절 퍼센티지      season.py
+  ⑦ 신뢰도 점수        confidence.py
+결과 JSON → app.py → 웹 화면
 ```
 
-사진이 없으면 `FileNotFoundError: 사진 파일이 없습니다` 오류가 납니다.
+### ① 흰 종이 찾기
 
-## 3. 실행 방법 (현재 2단계까지)
-
-모든 명령은 **프로젝트 최상위 폴더**(README.md 가 있는 폴더)에서 실행합니다.
-긴 명령은 **한 줄로** 붙여넣으세요. (여러 줄로 나눌 땐 PowerShell은 줄 끝에 백틱 `` ` ``, 맥/리눅스는 `\`)
-
-### (1) 자동 테스트 — 코드 고친 뒤엔 항상
-
-```powershell
-python -m pytest tests -v
-```
-
-### (2) 좌표 찾기 — 새 사진을 쓸 때만
-
-```powershell
-python tools/find_coords.py data/samples/photo1.jpg
-```
-
-1. 사진 창("click")이 뜸 (안 보이면 작업표시줄 확인)
-2. **흰 종이 가운데** 클릭 → PowerShell에 `박스 645,1817,725,1897` 처럼 출력
-3. **볼 가운데** 클릭 → 같은 방식으로 출력
-4. 사진 창을 선택한 상태에서 **아무 키**나 누르면 종료
-5. 출력된 박스 값을 (3)의 `--white`(종이), `--obj`(볼) 에 붙여넣기
-
-### (3) 조명 보정 확인 — photo1(노란 조명) vs photo3(밝은 조명)
-
-```powershell
-python tools/check_lighting.py --photo data/samples/photo1.jpg --white 645,1817,725,1897 --obj 1116,1827,1196,1907 --photo data/samples/photo3.jpg --white 745,3130,825,3210 --obj 2144,3111,2224,3191
-```
-
-정상 출력 (마지막 부분):
-```
-두 사진의 물건색 차이(ΔE) | 보정 전:  22.8   보정 후:  15.2
-성공: 보정 후 두 사진의 색 차이가 줄었습니다.
-```
-
-결과 이미지 열기 (위=원본, 아래=보정 후 / 빨강=종이, 초록=볼):
-```powershell
-start outputs\lighting_compare.jpg
-```
-
-사진 1장만 확인: `python tools/check_lighting.py --photo data/samples/photo1.jpg --white 645,1817,725,1897`
-
-### (6) 전체 진단 한 번에 — 4~6단계
-
-```powershell
-python -c "from backend.image_io import imread; from backend.pipeline import run_pipeline; import json; print(json.dumps(run_pipeline(imread('data/samples/photo1.jpg')), ensure_ascii=False, indent=1))"
-```
-
-### (7) 웜/쿨 경계값 찾기 — 라벨 붙은 사진이 있을 때
-
-```powershell
-# 폴더 이름이 정답 라벨: data/collected/warm/, data/collected/cool/
-python tools/fit_threshold.py data/collected --no-wb --out outputs/fit.csv
-```
-→ 방법 3가지(b / 논문①D / 논문③)별로 **최적 경계값과 정확도**를 표로 보여줍니다.
-   쓸 방법을 정하면 `data/reference/season_reference.json` 의 threshold 를 그 값으로 바꿉니다.
-
-### (4) 얼굴 점(랜드마크) 확인 — 3단계
-
-```powershell
-python tools/draw_landmarks.py data/samples/photo1.jpg
-```
-→ `outputs\landmarks_photo1.jpg` (초록=얼굴 점, 빨강=홍채 점). `--numbers` 를 붙이면 점 번호까지 표시.
-
-### (5) 얼굴 부위별 색 자동 추출 — 3단계 (좌표 클릭 필요 없음)
-
-```powershell
-python tools/check_face_color.py --photo data/samples/photo1.jpg --white 645,1817,725,1897 --photo data/samples/photo3.jpg --white 745,3130,825,3210
-```
-
-- 사진마다 볼·이마·홍채의 Lab, 사용 여부(O/X), 제외 이유 출력
-- 마지막에 두 사진의 **피부·눈 색 차이(보정 전 → 후)** 비교
-- 영역 그림: `outputs\face_color_photo1.jpg` (초록=사용, 빨강=제외, 하늘색=눈꺼풀 윤곽)
-- `--white` 를 빼면 조명 보정 없이 추출만 확인
-
-
-코드에서 쓰기:
+웹에서 촬영하면 화면의 가이드 박스 좌표가 함께 전송됩니다. 화면 크기와 사진 해상도가 달라도
+0~1 비율로 받아 사진 크기에 맞춰 변환합니다. 좌표가 없으면(저장된 사진을 도구로 돌릴 때)
+밝기 하한을 8단계로 올려가며 후보를 모으고 점수가 가장 높은 덩어리를 고릅니다.
 
 ```python
-from backend.image_io import imread
-from backend.color_utils import mean_lab
-from backend.vision.lighting import white_balance
-
-img = imread("data/samples/photo1.jpg")
-wb = white_balance(img, white_box=(645, 1817, 725, 1897))
-print(mean_lab(wb.image, box=(1116, 1827, 1196, 1907)))   # 보정 후 볼 Lab
-print(wb.warnings)                                         # 품질 경고 (없으면 [])
-
-from backend.vision.face_color import extract_face_colors
-fc = extract_face_colors(wb.image)                         # 얼굴 자동 검출 → 부위별 색
-print(fc.skin, fc.eye)                                     # 피부 Lab, 눈 Lab
-print(fc.to_dict())                                        # 알고리즘 파트로 넘기는 형식 (docs/data_format.md)
+score = clean * bright * extent * sat_ok * size_ok * border_ok
+#        포화안됨  밝다    네모나다  무채색   크기적당  테두리에 안 닿음
 ```
 
-## 4. 진행 현황
+조건을 만족하는 첫 덩어리에서 멈추면 JPEG 잡음 정도의 차이로도 벽이 잡힙니다.
+그래서 후보 전체에 점수를 매겨 고릅니다.
 
-| 단계 | 내용 | 상태 |
+### ② 조명 보정 (화이트밸런스)
+
+흰 종이는 원래 B=G=R 이어야 합니다. 사진에서 `[218, 198, 183]` 으로 찍혔다면 그만큼
+조명·카메라가 색을 치우치게 만든 것이므로, 각 채널에 `목표값 ÷ 측정값` 을 곱해 되돌립니다.
+
+```python
+gain = 235 / [218, 198, 183] = [1.08, 1.19, 1.28]
+```
+
+목표를 255가 아닌 **235**로 둡니다. 255로 맞추면 종이보다 밝은 부분(이마 반사 등)이 잘려나갑니다.
+
+### ③ 얼굴에서 어디를 쓰나
+
+MediaPipe FaceMesh 로 얼굴에 478개의 점을 찍고, 그 점들로 영역을 만듭니다.
+**웜/쿨 판정에 쓰는 것은 양 볼뿐입니다.**
+
+```python
+REGIONS = {
+    "cheek_right": [117, 118, 101, 36, 205, 187, 123],
+    "cheek_left":  [346, 347, 330, 266, 425, 411, 352],
+    "forehead":    [103, 67, 109, 10, 338, 297, 332, 333, 299, 337, 151, 108, 69, 104],
+}
+```
+
+이마는 뺐습니다 (`use_forehead_in_skin: False`). 앞머리 그림자와 번들거림이 섞여서 오히려
+사람 사이의 차이를 덮어버렸습니다. 측정으로 확인한 결과입니다.
+
+| 데이터 | 볼+이마 | 볼만 |
 |---|---|---|
-| 1 | 폴더 구조 · README | ✅ |
-| 2 | 조명 보정 함수화 (check2.py 기반) | ✅ photo1·photo3 실측 22.8 → 15.2 (check2 원본 결과와 동일) |
-| 3 | MediaPipe 얼굴·색 자동 추출 | ✅ 피부·눈·머리카락 + 사진 품질 지표 (피부 a·b 차이 15.2 → 3.4, 머리 2.5) |
-| 4 | 시즌 퍼센티지 판정 | 🟡 웜/쿨 3가지 방법 구현 ✅ / 경계값은 임시(사진 모이면 fit_threshold.py로 확정) |
-| 5 | 신뢰도 | ✅ 사진 품질 + 조명 경고 + 1·2위 격차 |
-| 6 | 파이프라인 연결 | ✅ run_pipeline() — 웹 연결 방법은 docs/web_integration.md |
-| 7 | 웹 (Flask + 웹캠) | 🟡 UI 완성 / 백엔드 연결 남음 |
+| 라벨 확실한 웹캠 4장 (웜·쿨 간격) | +4.3° | **+6.8°** |
+| 팀원 촬영본 (경계형 vs 쿨) | −0.1° | **+4.2°** |
 
-## 5. Git 협업 (main 에 바로 push 하는 방식)
+영역 안에서는 그냥 평균을 내지 않고 **절사평균**을 씁니다. 반사광(250 이상)을 버리고,
+남은 것 중 밝기 하위 10%(그림자·점·잔머리)와 상위 10%(번들거림)도 버린 뒤 평균합니다.
 
-레포: https://github.com/jisu508/PersonalColor
+눈동자와 머리카락도 추출하지만 판정에는 쓰지 않고, 화면 표시와 신뢰도 감점에만 씁니다.
 
-### 매번 작업할 때 순서
+### ④ 촬영 조건 점검
 
-```powershell
-git pull origin main               # ① 작업 시작 전: 팀원이 올린 최신 코드 받기
+조건을 못 맞추면 **판정하지 않고 재촬영을 안내합니다.** 틀린 답을 내놓는 것보다 낫습니다.
 
-# ... 코드 작업 ...
+| 항목 | 기준 | 이유 |
+|---|---|---|
+| 양 볼 색차 ΔE | 8 초과 차단 | 한쪽에서만 빛을 받으면 그 볼이 판정을 끌고 감 |
+| 흰 종이 포화 비율 | 10% 초과 차단 | 종이가 날아가면 기준색을 못 씀 |
+| 얼굴 크기 | 사진 폭의 15% 미만 차단 | 볼 픽셀이 부족 |
+| 화이트밸런스 실패 | 즉시 차단 | 보정 없이는 판정이 무의미 |
 
-python -m pytest tests             # ② 올리기 전: 테스트 통과 확인
-git add .
-git status                         #    .jpg 사진 / .venv / __pycache__ 가 목록에 없는지 확인!
-git commit -m "무엇을 했는지 한 줄로"
-git pull origin main               # ③ 올리기 직전: 그사이 올라온 코드 한 번 더 받기
-git push origin main               # ④ 올리기
+### ⑤ 웜/쿨 판정 — 핵심
+
+```python
+h = np.degrees(np.arctan2(b, a))        # 색상각
 ```
 
-### 팀 규칙
+| 기호 | 뜻 |
+|---|---|
+| `L` | 밝기 (0 검정 ~ 100 흰색) |
+| `a` | 초록(−) ↔ **빨강(+)** — 홍조가 있으면 커짐 |
+| `b` | 파랑(−) ↔ **노랑(+)** — 노란 피부면 커짐 |
+| `h = atan2(b, a)` | **색상각.** 빨강과 노랑의 비율. 색의 진하기와 무관 |
 
-1. **작업 전과 push 직전에 항상 `git pull origin main`.**
-   push 가 `! [rejected] ... (fetch first)` 로 거절되면 → 그사이 누가 먼저 올린 것.
-   `git pull origin main` 후 다시 `git push origin main` 하면 된다.
-2. **push 전 `python -m pytest tests` 통과 확인.** main 에 바로 반영되므로 고장 난 코드를 올리면 팀 전원이 멈춘다.
-3. **자기 파트 폴더 위주로 수정.** 같은 파일을 동시에 고치면 충돌이 난다.
-   README·requirements.txt 같은 공통 파일을 고칠 땐 단톡에 먼저 알리기.
-4. **인물 사진은 절대 커밋하지 않기** (`data/samples/`, `outputs/` 는 `.gitignore` 처리됨).
-
-### pull 할 때 충돌(CONFLICT)이 나면
+`b` 만 쓰면 안 되는 이유가 여기 있습니다. 홍조가 심한 쿨톤(`a` 25.6, `b` 23.5)은
+`b` 가 크다는 이유로 웜으로 잘못 나옵니다. `h` 는 **비율**을 보므로 이 사람을 맞힙니다.
+라벨이 확실한 사진으로 다섯 가지 방법을 비교한 결과입니다.
 
 ```
-CONFLICT (content): Merge conflict in 파일이름
+방법         정확도   웜      쿨
+hue (h)      100%   100%   100%
+b − C        100%   100%   100%
+b 단독        50%     0%   100%    ← b만 쓰면 웜을 하나도 못 맞힘
+논문① D       50%     0%   100%
 ```
-1. 해당 파일을 열면 `<<<<<<<`, `=======`, `>>>>>>>` 표시가 있다. 위쪽이 내 코드, 아래쪽이 팀원 코드.
-2. 둘 중 맞는 내용만 남기고 표시 세 줄을 지운다. (모르겠으면 그 파일 담당 팀원에게 물어보기)
-3. `git add 파일이름` → `git commit -m "충돌 해결"` → `git push origin main`
+
+### ⑥ 퍼센티지
+
+```python
+p_warm = 1 / (1 + exp(-(h - 기준선) / 폭))     # 웜 대 쿨 비율
+win_side = 1 if p_warm >= 0.5 else -1          # 이긴 쪽만 두 계절로 나눔
+```
+
+진 쪽은 안에서 더 나누지 않고 반반으로 둡니다. 밝기·채도 축은 아직 검증하지 않았는데
+진 쪽 내부를 가르면 `웜 62% 인데 1위는 여름 쿨` 같은 모순이 생깁니다.
+
+### ⑦ 신뢰도
+
+100점에서 깎아 내려갑니다.
+
+| 깎는 이유 | 점수 |
+|---|---|
+| 사진 흐림 (라플라시안 분산 < 10) | −25 |
+| 너무 어둡거나 밝음 (피부 L < 35 / > 88) | −20 |
+| 얼굴 작음 / 옆얼굴 | 각 −15 |
+| 조명 보정 경고 | 건당 −10 (최대 30) |
+| 머리·눈 추출 실패 | 각 −5 |
+| 1·2위 시즌 차이 10%p 미만 | −20 |
+
+85점 이상 "조명 충분" / 70 이상 "참고용으로 충분" / 50 이상 "조건이 좋지 않음" / 그 미만 "재촬영 권장"
+
+---
+
+## 부가 기능 — 실시간 디지털 드레이핑
+
+결과 화면의 **디지털 드레이핑** 버튼을 누르면 카메라가 켜지고, 시즌 컬러 팬 배경 가운데
+타원에 얼굴이 실시간으로 들어갑니다. **⊞ 전체** 버튼을 누르면 네 시즌을 2×2로 동시에 비교할 수 있습니다.
+
+브라우저 안에서만 동작합니다 — 백엔드를 거치지 않고, 외부 라이브러리도 인터넷도 필요 없습니다.
+`static/draping.js` 의 `drawPerson()` 하나만 바꾸면 나중에 인물 분리(머리카락까지 오려내기)로
+올릴 수 있습니다.
+
+---
+
+## 기준값은 전부 JSON 한 곳에
+
+`data/reference/season_reference.json` 에 모든 숫자가 있습니다. 코드에는 숫자를 박아두지 않았습니다.
+
+```json
+"warm_cool": { "method": "hue", "hue": { "threshold": ..., "scale": 6.0, "borderline_band": ... } },
+"second_axis": { "lightness": {...}, "chroma": {...} },
+"white_balance": { "target": 235.0 },
+"quality_gate": { ... }
+```
+
+값마다 `_근거` 키가 붙어 있어서, 그 숫자가 어느 데이터에서 나왔는지 파일만 열면 확인됩니다.
+
+> **기준선(h)과 4계절 축은 현재 보정 중입니다.**
+> 촬영 환경(카메라·종이·조명)이 바뀌면 h 값이 통째로 평행 이동하기 때문에, 시연 장소에서
+> 촬영한 데이터로 다시 맞추고 있습니다. 자세한 내용은 아래 "알려진 한계" 를 보세요.
+
+---
+
+## 폴더 구조
+
+```
+PersonalColor/
+├── app.py                     Flask 서버 (화면 + 진단 API)
+├── requirements.txt
+│
+├── backend/                   진단 로직 (웹과 무관한 순수 Python)
+│   ├── color_utils.py         BGR→Lab 변환, 영역 평균색, ΔE 거리
+│   ├── image_io.py            한글 경로에서도 안전한 사진 읽기/쓰기
+│   ├── pipeline.py            사진 → 결과 dict (아래 모듈을 순서대로 연결)
+│   ├── vision/
+│   │   ├── paper.py           흰 종이 검출 · 기준색 추출
+│   │   ├── lighting.py        화이트밸런스
+│   │   ├── landmarks.py       MediaPipe 얼굴 478점
+│   │   └── face_color.py      부위별 색 추출 (절사평균)
+│   └── diagnosis/
+│       ├── season.py          웜/쿨 판정 → 4계절 퍼센티지
+│       └── confidence.py      신뢰도 0~100점
+│
+├── templates/index.html       촬영·결과 화면
+├── static/
+│   ├── main.js                촬영 → API 호출 → 결과 렌더링
+│   ├── draping.js             실시간 디지털 드레이핑
+│   ├── style.css  draping.css
+│   └── images/                시즌 컬러 팬 · 화장품 · 코디 이미지
+│
+├── data/
+│   ├── reference/season_reference.json    모든 기준값 + 근거
+│   ├── captures/              웹에서 촬영한 기록 (깃에 안 올라감)
+│   └── collected/             수집 사진 (깃에 안 올라감)
+│
+├── models/face_landmarker.task            MediaPipe 모델
+├── tools/                     확인·보정용 스크립트 (아래 표)
+├── tests/                     자동 테스트 47개
+└── docs/                      설계·분석 문서
+```
+
+---
+
+## 도구 모음
+
+| 명령 | 용도 |
+|---|---|
+| `python tools\diagnose.py <폴더\|사진>` | 저장된 사진 진단 · `--compare` 로 5가지 판정법 비교 |
+| `python tools\show_captures.py` | 웹 촬영 기록을 표로 (h, a, b, gain, 종이 위치, 판정) |
+| `python tools\fit_threshold.py <폴더> --ignore-gate --write` | 라벨 붙은 사진으로 기준선 재산출·저장 |
+| `python tools\plot_wb_effect.py <촬영기록 폴더>` | 조명 보정 효과를 그래프 3장 + CSV 로 |
+| `python tools\calibrate_paper.py` | 흰 종이가 중성인지 측정 (회색 카드 필요) |
+| `python tools\check_lighting.py <사진>` | 흰 종이·화이트밸런스만 확인 |
+| `python tools\check_face_color.py <사진>` | 부위별 Lab 값 확인 |
+| `python tools\draw_landmarks.py <사진>` | 얼굴 478점이 잘 잡히는지 그려보기 |
+| `python tools\find_coords.py <사진>` | 마우스로 영역 좌표 찍기 |
+| `python -m pytest tests -q` | 자동 테스트 47개 |
+
+---
+
+## 웹 API
+
+`app.py` 하나가 화면(`/`)과 진단 API(`/api/diagnose`)를 같이 띄웁니다.
+
+**요청**
+
+```
+POST /api/diagnose   (multipart/form-data)
+  image  : 사진 파일 (필수)
+  coords : {"x":0.62,"y":0.45,"width":0.22,"height":0.3}   (선택, 0~1 비율)
+```
+
+**성공 (200)**
+
+```json
+{ "ok": true,
+  "tone": { "verdict": "cool", "label": "쿨", "warm": 23.6, "cool": 76.4 },
+  "percentages": [ { "key": "winter_cool", "name": "겨울 쿨", "value": 45.9, "color": "#..." } ],
+  "best_group": "겨울 쿨",
+  "reliability": 80,
+  "reliability_msg": "참고용으로 충분",
+  "message": "...",
+  "corrected_image": "data:image/jpeg;base64,...",
+  "warnings": [] }
+```
+
+**재촬영 (400)**
+
+```json
+{ "ok": false, "code": "retake_required",
+  "error": "흰 종이가 하얗게 날아갔습니다 (57%). 종이에 조명이 직접 닿지 않게 해주세요.",
+  "reasons": ["..."] }
+```
+
+`code` 종류: `retake_required`, `paper_not_found`, `face_not_found`, `white_balance_failed`,
+`no_image`, `bad_image`, `pipeline_failed`, `server_error`.
+프론트는 `error` 문장을 그대로 띄우고 "다시 찍기" 버튼만 주면 됩니다.
+
+### 안전장치
+
+| 기능 | 하는 일 |
+|---|---|
+| 모든 오류를 JSON 으로 | Flask 기본 HTML 오류 페이지 대신 JSON — 프론트가 터지지 않음 |
+| 예상 못한 오류 → 400 안내 | 시연 중 흰 화면 방지. 원인은 `data/captures/errors.log` 에 기록 |
+| 좌표 검증 | `null`·NaN 좌표가 와도 무시하고 자동 탐지로 |
+| 촬영 기록 | 매 촬영마다 원본·보정본·판정 숫자를 `data/captures/<시각>/` 에 저장 |
+| numpy 변환 | numpy 숫자를 파이썬 숫자로 — `jsonify` 가 터지지 않게 |
+
+---
+
+## 참고한 연구
+
+| 출처 | 가져온 것 | 우리가 바꾼 것 |
+|---|---|---|
+| 여대생의 퍼스널 컬러 시스템 유형에 따른 얼굴색 분석 (2012) | 판별식 `D = −14.773 + 0.406a + 0.662b`, 뺨 L 평균 64.5 | 색차계로 잰 값이라 웹캠 스케일과 달라 그대로 쓰지 못함. `paper_d` 방법으로 코드에 남겨두고 비교용으로만 사용 |
+| ShowMeTheColor (공개 코드) | 피부·머리·눈의 b값을 웜/쿨 기준값과 비교하는 구조, 가중치 [30, 20, 5] | `smtc` 방법으로 구현해 비교. 최종 판정에는 쓰지 않음 |
+| 색채학 일반 (CIE Lab) | L·a·b 정의, 채도 `C = √(a²+b²)`, 색상각 `h = atan2(b, a)`, 색차 `ΔE` | 판정 변수로 `h` 를 선택 — 채도와 무관해 홍조·조명 세기에 덜 흔들림 |
+
+다섯 가지 판정 방법(`hue` / `bc` / `b` / `paper_d` / `smtc`)을 모두 구현해 두고
+같은 사진으로 비교했습니다. `python tools\diagnose.py <사진> --compare` 로 재현할 수 있습니다.
+
+---
+
+## 알려진 한계
+
+정직하게 적습니다. 발표에서 질문이 들어오면 이대로 답하면 됩니다.
+
+**① 기준선은 촬영 환경마다 다릅니다.**
+카메라·종이·조명이 바뀌면 h 값이 통째로 평행 이동합니다. 측정으로 확인했습니다 —
+같은 사람이 날짜(조명)가 바뀌면 h 가 최대 19.2° 움직였고, 사람 사이 차이는 5.5° 였습니다.
+**환경이 사람보다 더 크게 작용합니다.** 그래서 시연 장소에서 촬영한 데이터로 기준선을 다시 맞추고 있습니다.
+같은 장소·같은 조명에서 찍은 6장의 표준편차는 2.4° 로, 조건을 고정하면 측정이 안정됩니다.
+
+**② 4계절 축은 아직 검증되지 않았습니다.**
+웜/쿨이 정해진 뒤 봄/가을, 여름/겨울을 가르는 밝기·채도 기준점은 데이터로 맞춘 값이 아닙니다.
+화면에서는 **웜/쿨을 주 결과로, 4계절은 참고용으로** 표시하는 것이 맞습니다.
+
+**③ 복사용지는 완전한 흰색이 아닙니다.**
+형광증백제 때문에 조명에 따라 파랗게 찍힙니다 (실측 B−R +34, 같은 방 벽은 −9).
+다만 같은 종이·같은 조명을 계속 쓰면 항상 같은 크기의 오차라서 기준선이 흡수합니다.
+회색 카드가 있으면 `tools\calibrate_paper.py` 로 그 치우침을 측정해 보정할 수 있습니다.
+
+**④ 표본이 적습니다.**
+라벨이 확실한 사람이 아직 한 자릿수입니다. 기준선은 잠정값이며,
+표본이 모일 때마다 `tools\fit_threshold.py --write` 로 다시 산출합니다.
+
+---
+
+## 조명 보정 효과 (측정 결과)
+
+기준 노트북으로 촬영한 29장(신뢰도 70 이상) 전수 분석입니다.
+
+| 지표 | 보정 전 → 후 | |
+|---|---|---|
+| 흰 종이 색 치우침 | 15.4% → 0.88% | 94% 감소 |
+| 보정 없이 판정하면 뒤바뀌는 사진 | **7 / 29** | 24% |
+| 피부 h 표준편차 | 8.4° → 6.8° | 19% 감소 |
+
+`python tools\plot_wb_effect.py <촬영기록 폴더>` 로 그래프와 CSV를 다시 만들 수 있습니다.
+
+---
+
+## 개발 환경
+
+Python 3.11 · OpenCV · MediaPipe · NumPy · Flask · pytest
+사진·촬영 기록은 개인정보라 `.gitignore` 로 막아두었습니다 (`data/samples/`, `data/collected/`, `data/captures/`).
