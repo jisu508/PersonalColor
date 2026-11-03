@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let stream = null;
     let faceCanvas = null;   // 얼굴 가이드 영역만 잘라낸 캔버스
+    let faceCoords = null;   // 얼굴 가이드가 프레임의 어디인지 (0~1 비율). 결과 사진을 얼굴 중앙에 맞출 때 쓴다
     let currentSeason = null;
 
     // 시즌별 가이드 이미지 (static/images/ 폴더에 넣어두세요)
@@ -67,7 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 가이드 박스 좌표는 화면을 숨기기 '전에' 재야 한다.
         // 숨긴 요소는 크기가 0 이라 계산이 NaN 이 되고, JSON 으로는 null 이 되어 서버가 오류를 낸다.
         const boxCoords = getGuideCoords('guide-box');
-        const faceCoords = getGuideCoords('face-guide');
+        faceCoords = getGuideCoords('face-guide');
 
         webcamSection.classList.add('hidden');
         loadingSection.classList.remove('hidden');
@@ -146,6 +147,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         return box;
     }
 
+    // 결과 화면의 사진을 얼굴 가이드 중앙에 맞춘다.
+    // object-fit: cover 는 기본값이 프레임 한가운데(50% 50%)라, 얼굴이 왼쪽·흰 종이가 오른쪽인
+    // 우리 화면에서는 가운데를 잘라내면서 얼굴 옆이 잘려 나간다.
+    // 얼굴 가이드의 중심이 상자 한가운데에 오도록 object-position 을 직접 계산해 준다.
+    function centerOnFace(img) {
+        if (!img || !img.naturalWidth || !img.naturalHeight) return;
+        const bw = img.clientWidth, bh = img.clientHeight;   // 화면에 그려지는 상자 크기
+        if (!bw || !bh) return;
+
+        // 촬영 때 잰 좌표가 없으면 face-guide 의 CSS 기본 위치를 쓴다 (left 14% / width 43% / top 18% / height 64%)
+        const f = faceCoords || { x: 0.14, y: 0.18, width: 0.43, height: 0.64 };
+        const fx = f.x + f.width / 2;    // 얼굴 중심 (프레임 대비 0~1)
+        const fy = f.y + f.height / 2;
+
+        // cover 가 쓰는 것과 같은 배율로 사진을 키운 뒤, 얼굴 중심이 상자 한가운데에 오는 위치를 구한다
+        const scale = Math.max(bw / img.naturalWidth, bh / img.naturalHeight);
+        const sw = img.naturalWidth * scale, sh = img.naturalHeight * scale;
+        const clamp = v => Math.max(0, Math.min(1, v));
+        const px = sw > bw + 0.5 ? clamp((fx * sw - bw / 2) / (sw - bw)) : 0.5;
+        const py = sh > bh + 0.5 ? clamp((fy * sh - bh / 2) / (sh - bh)) : 0.5;
+        img.style.objectPosition = (px * 100).toFixed(1) + '% ' + (py * 100).toFixed(1) + '%';
+    }
+
+    // naturalWidth 는 사진이 다 불러와져야 알 수 있고, 창 크기가 바뀌면 다시 계산해야 한다.
+    // 리스너는 여기서 한 번만 달아 둔다 (재촬영마다 달면 계속 쌓인다).
+    const FOCUS_IMG_IDS = ['img-original', 'img-corrected', 'result-profile-img'];
+    FOCUS_IMG_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('load', () => centerOnFace(el));
+    });
+    window.addEventListener('resize', () => {
+        FOCUS_IMG_IDS.forEach(id => centerOnFace(document.getElementById(id)));
+    });
+
     // 얼굴 가이드 영역만 잘라내기 (좌표 계산 실패 시 중앙 정사각형으로 대체)
     function cropToCanvas(src, c) {
         let sx, sy, sw, sh;
@@ -197,7 +232,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingSection.classList.add('hidden');
         resultSection.classList.remove('hidden');
 
-        document.getElementById('result-profile-img').src = imageUrl;
+        const profileImg = document.getElementById('result-profile-img');
+        profileImg.src = imageUrl;
+        centerOnFace(profileImg);
         document.getElementById('reliability-text').textContent = `신뢰도: ${data.reliability}%`;
         document.getElementById('reliability-desc').textContent = data.reliability_msg;
 
@@ -244,10 +281,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             `<br><span class="tone-sub">${data.message ?? ''}</span>`;
 
         // 조명 보정 비교 — CSS 효과가 아니라 백엔드가 실제로 보정한 사진을 쓴다
-        document.getElementById('img-original').src = imageUrl;
+        const original = document.getElementById('img-original');
+        original.src = imageUrl;
+        centerOnFace(original);
         const corrected = document.getElementById('img-corrected');
         corrected.style.filter = '';
         corrected.src = data.corrected_image || imageUrl;
+        centerOnFace(corrected);
     }
 
     // ===== 6. 시즌 컬러 휠에 내 얼굴 합성 =====

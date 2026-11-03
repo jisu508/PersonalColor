@@ -256,7 +256,9 @@ video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
     border: 3px solid #fff;
     box-shadow: 0 0 0 1px var(--line), 0 8px 20px rgba(166, 139, 245, 0.15);
     background: var(--cream);
-    aspect-ratio: 3/4;
+    /* 16:9 로 찍힌 사진에서 얼굴 가이드(가로 43%)가 다 들어오는 비율.
+       3/4 였을 때는 가로로 42% 만 보여서 얼굴 옆이 잘렸다. */
+    aspect-ratio: 1/1;
 }
 .img-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .badge {
