@@ -16,6 +16,7 @@
     <!-- 외부 CSS (캐시 때문에 수정할 때마다 v 숫자를 올리세요) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
     <link rel="stylesheet" href="{{ url_for('static', filename='draping.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='clothes.css') }}?v=1">
 </head>
 <body>
     <!-- 상단 네비게이션 -->
@@ -122,6 +123,13 @@
                 <button id="draping-btn" class="btn-primary" type="button">드레이핑 시작하기</button>
             </div>
 
+            <!-- 실시간 옷 색 바꾸기 (clothes.js) -->
+            <div class="card draping-card">
+                <h2>실시간 옷 색 바꾸기</h2>
+                <p>카메라를 켠 채로 색을 누르면 지금 입고 있는 옷의 색만 바뀝니다. 어떤 색이 받는지 바로 비교해보세요.</p>
+                <button id="clothes-btn" class="btn-primary" type="button">옷 색 바꿔보기</button>
+            </div>
+
             <!-- 내 얼굴로 시즌 컬러 확인 -->
             <div class="card preview-pick-card">
                 <h2>내 얼굴로 시즌 컬러 확인</h2>
@@ -164,6 +172,7 @@
 
     <!-- JS 파일 연동 -->
     <script src="{{ url_for('static', filename='draping.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='clothes.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='main.js') }}?v=12"></script>
 </body>
 </html>

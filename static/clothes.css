@@ -1,0 +1,111 @@
+/* ── 실시간 옷 색 바꾸기 (draping.css 와 같은 파스텔 유리 질감) ───────── */
+.cl-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px;
+    overflow-y: auto;
+    background: rgba(59, 47, 74, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.cl-modal.hidden { display: none; }
+
+.cl-inner {
+    text-align: center;
+    width: min(700px, 100%);
+    padding: 18px 16px 20px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 32px;
+    box-shadow: 0 24px 60px rgba(59, 47, 74, 0.35), 0 0 0 1px var(--line);
+}
+
+/* 영상 + 안내문 겹치기 */
+.cl-stage { position: relative; }
+#cl-canvas {
+    display: block;
+    width: 100%; height: auto;
+    border-radius: 22px;
+    border: 3px solid #fff;
+    background: #2a2233;
+    box-shadow: 0 0 0 1px var(--line), 0 10px 26px rgba(166, 139, 245, 0.2);
+}
+.cl-status {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 24px;
+    border-radius: 22px;
+    background: rgba(42, 34, 51, 0.72);
+    color: #fff; font-size: 0.95rem; line-height: 1.6;
+}
+.cl-status.hidden { display: none; }
+
+.cl-hint {
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    margin: 14px 0 12px;
+}
+
+/* 시즌별 색 팔레트 */
+.cl-palette {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.cl-group {
+    padding: 10px 8px 12px;
+    border: 1px solid var(--blush);
+    border-radius: 18px;
+    background: var(--cream);
+}
+.cl-group-name {
+    display: block;
+    font-size: 0.8rem; font-weight: 700;
+    color: var(--ink); margin-bottom: 8px;
+}
+.cl-swatches { display: flex; gap: 6px; justify-content: center; }
+
+.cl-swatch {
+    position: relative;
+    width: 38px; height: 38px;
+    border-radius: 50%; cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--line);
+    transition: transform .18s, box-shadow .18s;
+}
+.cl-swatch span {              /* 색 이름은 마우스를 올렸을 때만 */
+    position: absolute; bottom: -20px; left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.68rem; color: var(--ink-soft);
+    opacity: 0; transition: opacity .18s; pointer-events: none;
+}
+.cl-swatch:hover { transform: scale(1.12); }
+.cl-swatch:hover span { opacity: 1; }
+.cl-swatch.on {
+    transform: scale(1.14);
+    box-shadow: 0 0 0 3px var(--lilac), 0 4px 10px rgba(166, 139, 245, 0.35);
+}
+
+/* 진하기 슬라이더 · 디버그 체크박스 */
+.cl-controls {
+    display: flex; flex-wrap: wrap;
+    gap: 16px; justify-content: center; align-items: center;
+    margin-bottom: 14px;
+    font-size: 0.85rem; color: var(--ink-soft);
+}
+.cl-range { display: flex; align-items: center; gap: 8px; }
+.cl-range input { width: 130px; accent-color: var(--rose); cursor: pointer; }
+.cl-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.cl-check input { accent-color: var(--lilac); cursor: pointer; }
+
+.cl-actions { display: flex; gap: 10px; justify-content: center; }
+.cl-actions button { width: auto; min-width: 120px; height: 50px; font-size: 0.98rem; }
+
+@media (max-width: 560px) {
+    .cl-inner { border-radius: 26px; padding: 14px 12px 16px; }
+    .cl-palette { grid-template-columns: 1fr; }
+    .cl-swatch { width: 34px; height: 34px; }
+    .cl-actions button { min-width: 0; flex: 1; }
+}

@@ -220,6 +220,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         drapingBtn.addEventListener('click', () => openDraping(lastBestGroup));
     }
 
+    // 4-2. 실시간 옷 색 바꾸기 — 진단 시즌의 색이 먼저 선택된 상태로 열린다
+    const clothesBtn = document.getElementById('clothes-btn');
+    if (clothesBtn) {
+        clothesBtn.addEventListener('click', () => openClothes(lastBestGroup));
+    }
+
     // 4. 다시 검사하기
     resetBtn.addEventListener('click', () => {
         resultSection.classList.add('hidden');

@@ -273,6 +273,7 @@ video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
 
 .mt-20 { margin-top: 24px; }
 
+/* 제목 옆 출처 표기 */
 .season-guide-images { display: flex; flex-direction: column; gap: 16px; }
 .season-guide-images img {
     width: 100%;
