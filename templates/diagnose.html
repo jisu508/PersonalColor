@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
     <link rel="stylesheet" href="{{ url_for('static', filename='draping.css') }}?v=2">
     <link rel="stylesheet" href="{{ url_for('static', filename='clothes.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='makeup/makeup.css') }}?v=1">
 </head>
 <body>
     <!-- 상단 네비게이션 -->
@@ -130,6 +131,13 @@
                 <button id="clothes-btn" class="btn-primary" type="button">옷 색 바꿔보기</button>
             </div>
 
+            <!-- 시즌 메이크업 입어보기 (makeup/makeup.js) -->
+            <div class="card draping-card">
+                <h2>시즌 메이크업 입어보기</h2>
+                <p>카메라를 켜면 진단된 시즌의 입술·볼터치 색이 내 얼굴 위에 실시간으로 입혀져요. 네 시즌을 한꺼번에 비교할 수도 있어요.</p>
+                <button id="makeup-btn" class="btn-primary" type="button">메이크업 입어보기</button>
+            </div>
+
             <!-- 내 얼굴로 시즌 컬러 확인 -->
             <div class="card preview-pick-card">
                 <h2>내 얼굴로 시즌 컬러 확인</h2>
@@ -173,6 +181,7 @@
     <!-- JS 파일 연동 -->
     <script src="{{ url_for('static', filename='draping.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='clothes.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='makeup/makeup.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='main.js') }}?v=12"></script>
 </body>
 </html>

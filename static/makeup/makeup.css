@@ -1,0 +1,82 @@
+/* ── 시즌 메이크업 (draping.css · clothes.css 와 같은 파스텔 유리 질감) ───────── */
+.mk-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px; overflow-y: auto;
+    background: rgba(59, 47, 74, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.mk-modal.hidden { display: none; }
+
+.mk-inner {
+    text-align: center;
+    width: min(700px, 100%);
+    max-height: 100%; overflow-y: auto;
+    padding: 18px 16px 20px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 32px;
+    box-shadow: 0 24px 60px rgba(59, 47, 74, 0.35), 0 0 0 1px var(--line);
+}
+
+.mk-stage { position: relative; }
+#mk-canvas {
+    display: block; width: 100%; height: auto;
+    border-radius: 22px; border: 3px solid #fff; background: #2a2233;
+    box-shadow: 0 0 0 1px var(--line), 0 10px 26px rgba(166, 139, 245, 0.2);
+}
+.mk-msg {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 9px 14px; font-size: 0.88rem; color: #fff;
+    background: rgba(59, 47, 74, 0.66);
+    border-radius: 0 0 20px 20px;
+}
+.mk-msg.hidden { display: none; }
+
+.mk-hint { color: var(--ink-soft); font-size: 0.88rem; margin: 14px 0 12px; }
+
+.mk-block {
+    padding: 10px 10px 12px; margin-bottom: 10px;
+    border: 1px solid var(--blush); border-radius: 18px; background: var(--cream);
+}
+.mk-label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.mk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mk-two .mk-block { margin-bottom: 10px; }
+.mk-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
+.mk-note { font-size: 0.8rem; color: var(--ink-soft); margin: 8px 0; min-height: 1.2em; }
+
+.mk-btn {
+    cursor: pointer; font: inherit; font-size: 0.9rem;
+    padding: 8px 14px; border-radius: 999px;
+    border: 1.5px solid var(--blush); background: #fff; color: var(--ink);
+    transition: transform .15s;
+}
+.mk-btn:hover { transform: translateY(-1px); }
+.mk-btn.on { background: linear-gradient(120deg, var(--rose), var(--lilac)); border-color: transparent; color: #fff; }
+
+.mk-chip {
+    width: 34px; height: 34px; padding: 0; cursor: pointer; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(59, 47, 74, 0.25);
+    transition: transform .18s, box-shadow .18s;
+}
+.mk-chip:hover { transform: scale(1.12); }
+.mk-chip.on { transform: scale(1.14); box-shadow: 0 0 0 3px var(--lilac), 0 4px 10px rgba(166, 139, 245, 0.35); }
+
+.mk-btn:focus-visible, .mk-chip:focus-visible { outline: 3px solid var(--lilac); outline-offset: 2px; }
+
+.mk-controls {
+    display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; align-items: center;
+    margin: 4px 0 14px; font-size: 0.85rem; color: var(--ink-soft);
+}
+.mk-range { display: flex; align-items: center; gap: 8px; }
+.mk-range input { width: 130px; accent-color: var(--rose); cursor: pointer; }
+
+.mk-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.mk-actions button { width: auto; min-width: 120px; height: 50px; font-size: 0.98rem; }
+
+@media (max-width: 560px) {
+    .mk-inner { border-radius: 26px; padding: 14px 12px 16px; }
+    .mk-two { grid-template-columns: 1fr; }
+    .mk-actions button { min-width: 0; flex: 1; }
+}
