@@ -449,3 +449,21 @@ section[id], header[id] { scroll-margin-top: 90px; }
     .hero-swatches span, .best-color-card::after { animation: none; }
     html { scroll-behavior: auto; }
 }
+
+/* 결과 리포트 QR */
+.report-qr-card #report-qr {
+    width: 200px; height: 200px;
+    display: block; margin: 16px auto 10px;
+    padding: 10px; background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 0 0 1px var(--line), 0 8px 22px rgba(166, 139, 245, 0.18);
+}
+.report-qr-card .qr-url {
+    font-size: 0.78rem; color: var(--ink-soft);
+    word-break: break-all; margin-bottom: 14px;
+}
+.report-qr-card a.btn-secondary {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: auto; min-width: 180px; height: 46px;
+    text-decoration: none; font-size: 0.92rem;
+}

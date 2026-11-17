@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ r.info.label }} · 내 퍼스널컬러 리포트</title>
+<meta name="theme-color" content="#fff7fa">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎨</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#3b2f4a; --ink-soft:rgba(59,47,74,.62);
+  --rose:#f2799d; --lilac:#a68bf5; --blush:#ffd9e4; --cream:#fff7fa;
+  --line:rgba(166,139,245,.18);
+  --accent:{{ r.percentages[0].color if r.percentages else '#f2799d' }};
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#fff; color:var(--ink);
+  font-family:'Gowun Dodum','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  padding:0 0 56px; word-break:keep-all; -webkit-font-smoothing:antialiased;
+  line-height:1.62;
+}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px}
+
+/* 헤더 */
+.hero{
+  text-align:center; padding:40px 20px 30px; margin-bottom:18px;
+  background:linear-gradient(165deg,var(--cream),#f4efff);
+  border-bottom:1px solid var(--line);
+}
+.hero .eyebrow{font-size:.8rem;color:var(--ink-soft);letter-spacing:.06em}
+.hero h1{
+  font-family:'Jua',sans-serif; font-size:2.5rem; margin:6px 0 4px;
+  color:var(--accent); line-height:1.15;
+}
+.hero .keywords{font-size:.92rem;color:var(--ink-soft)}
+.hero .headline{margin-top:14px;font-size:1rem}
+.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.chip{
+  font-size:.78rem;padding:5px 12px;border-radius:999px;
+  background:rgba(255,255,255,.75);border:1px solid var(--line);
+}
+
+/* 공통 카드 */
+section{
+  margin-bottom:16px;padding:20px 18px;
+  border:1px solid var(--line);border-radius:22px;background:#fff;
+  box-shadow:0 6px 20px rgba(242,121,157,.06);
+}
+h2{font-size:1.06rem;margin-bottom:4px}
+.sub{font-size:.82rem;color:var(--ink-soft);margin-bottom:14px}
+
+/* 퍼센트 막대 */
+.bar-row{margin-bottom:10px}
+.bar-top{display:flex;justify-content:space-between;font-size:.86rem;margin-bottom:4px}
+.bar-name{display:flex;align-items:center;gap:6px}
+.dot{width:11px;height:11px;border-radius:50%;flex:none}
+.track{height:8px;background:#f1edf7;border-radius:99px;overflow:hidden}
+.fill{height:100%;border-radius:99px}
+
+/* Best / Worst 비교 */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.cmp figure{margin:0}
+.cmp img{width:100%;display:block;border-radius:16px;border:2px solid #fff;
+  box-shadow:0 0 0 1px var(--line)}
+.cmp .tag{
+  display:inline-block;margin-bottom:6px;font-size:.74rem;font-weight:700;
+  padding:3px 10px;border-radius:999px;
+}
+.tag.good{background:#e3f5ec;color:#1f7a53}
+.tag.bad{background:#fdeaea;color:#b0423c}
+.swatch-line{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:.86rem}
+.sw{width:17px;height:17px;border-radius:5px;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+.why{margin-top:6px;font-size:.82rem;color:var(--ink-soft)}
+.why li{margin-left:15px;margin-bottom:2px}
+.note{
+  margin-top:4px;padding:12px 14px;border-radius:14px;
+  background:var(--cream);border:1px dashed var(--blush);
+  font-size:.82rem;color:var(--ink-soft);
+}
+.note b{color:var(--ink)}
+
+/* 색 목록 */
+.colors{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.color-chip{text-align:center;width:62px}
+.color-chip .box{width:62px;height:46px;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.1)}
+.color-chip span{display:block;font-size:.68rem;margin-top:4px;color:var(--ink-soft);line-height:1.3}
+
+.pick{padding:12px 0;border-bottom:1px dashed var(--line)}
+.pick:last-child{border-bottom:none}
+.pick-head{display:flex;align-items:center;gap:8px;font-size:.92rem;font-weight:700}
+.rank{font-size:.72rem;color:#fff;background:var(--lilac);border-radius:999px;padding:2px 8px}
+
+/* 표 */
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+td{padding:7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{width:74px;color:var(--ink-soft);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+
+.guide-imgs{display:flex;flex-direction:column;gap:12px}
+.guide-imgs img{width:100%;border-radius:16px;display:block}
+
+.meta{font-size:.76rem;color:var(--ink-soft);text-align:center;padding:10px 16px 0}
+.dl{text-align:center}
+.dl-page{margin:0 0 22px}
+.dl-page figcaption{
+  font-size:.82rem;font-weight:700;color:var(--ink);
+  text-align:left;margin-bottom:8px;
+}
+.dl-page img{
+  width:100%;display:block;border-radius:16px;background:#fff;
+  box-shadow:0 0 0 1px var(--line),0 6px 18px rgba(166,139,245,.16);
+}
+.dl-save{
+  display:inline-block;margin-top:10px;padding:9px 20px;
+  border-radius:999px;text-decoration:none;
+  font-size:.82rem;color:var(--ink);
+  background:#fff;border:1.5px solid var(--blush);
+}
+.dl-btn{
+  display:block;width:100%;height:56px;line-height:56px;
+  margin:4px 0 10px;border-radius:999px;text-decoration:none;
+  color:#fff;font-size:1.02rem;font-weight:700;
+  background:linear-gradient(120deg,var(--rose),var(--lilac));
+  box-shadow:0 8px 20px rgba(242,121,157,.28);
+}
+.dl-btn:active{transform:scale(.985)}
+.dl-hint{font-size:.78rem;color:var(--ink-soft)}
+.warn{background:#fff8e6;border:1px solid #f6e3b0;border-radius:14px;
+  padding:11px 13px;font-size:.82rem;margin-top:10px}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <p class="eyebrow">COLORY · 퍼스널컬러 진단 결과</p>
+  <h1>{{ r.info.label }}</h1>
+  <p class="keywords">{{ r.info.keywords }}</p>
+  <p class="headline">{{ r.info.headline }}</p>
+  <div class="chips">
+    <span class="chip">{{ r.tone.label }}톤 {{ r.tone.warm if r.tone.verdict != 'cool' else r.tone.cool }}%</span>
+    {% if r.reliability is not none %}<span class="chip">신뢰도 {{ r.reliability }}</span>{% endif %}
+    <span class="chip">내 피부 <span class="sw" style="display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px;background:{{ r.skin_hex }}"></span></span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- 1. 진단 요약 -->
+  <section>
+    <h2>진단 요약</h2>
+    <p class="sub">{{ r.message }}</p>
+    {% for p in r.percentages %}
+    <div class="bar-row">
+      <div class="bar-top">
+        <span class="bar-name"><i class="dot" style="background:{{ p.color }}"></i>{{ p.name }}</span>
+        <span>{{ p.value }}%</span>
+      </div>
+      <div class="track"><div class="fill" style="width:{{ p.value }}%;background:{{ p.color }}"></div></div>
+    </div>
+    {% endfor %}
+    {% if r.measure_text %}
+    <div class="note" style="margin-top:14px">{{ r.measure_text }}</div>
+    {% endif %}
+    {% if r.warnings %}
+    <div class="warn">
+      {% for w in r.warnings %}<div>· {{ w }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- 2. Best vs Worst (핵심) -->
+  {% if r.best and r.worst %}
+  <section>
+    <h2>잘 받는 색 vs 안 받는 색</h2>
+    <p class="sub">같은 얼굴 사진에 색만 바꿔 대어본 것입니다.{% if r.photo_corrected %}
+      사진은 흰 종이로 <b>조명 보정을 마친 것</b>이라 실제 피부색에 가깝습니다.{% endif %}</p>
+    {% if not r.photo_corrected %}
+    <div class="warn">조명 보정본이 없어 <b>원본 사진</b>으로 비교했습니다.
+      방 조명 색이 섞여 있어 실제보다 색이 치우쳐 보일 수 있어요.</div>
+    {% endif %}
+
+    {% if r.drape.best and r.drape.worst %}
+    <div class="compare">
+      <figure class="cmp">
+        <span class="tag good">BEST · {{ r.best[0].name }}</span>
+        <img src="{{ url_for('report_image', capture_id=capture_id, filename=r.drape.best) }}" alt="잘 받는 색">
+      </figure>
+      <figure class="cmp">
+        <span class="tag bad">WORST · {{ r.worst[0].name }}</span>
+        <img src="{{ url_for('report_image', capture_id=capture_id, filename=r.drape.worst) }}" alt="안 받는 색">
+      </figure>
+    </div>
+    {% endif %}
+
+    <div class="pick">
+      <div class="pick-head"><i class="sw" style="background:{{ r.best[0].hex }}"></i>{{ r.best[0].name }} 를 댔을 때</div>
+      <ul class="why">{% for w in r.best[0].why %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+    <div class="pick">
+      <div class="pick-head"><i class="sw" style="background:{{ r.worst[0].hex }}"></i>{{ r.worst[0].name }} 를 댔을 때</div>
+      <ul class="why">{% for w in r.worst[0].why %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+
+    <div class="note">
+      <b>얼굴 사진은 두 장 모두 똑같습니다.</b> 보정도 합성도 하지 않았어요.
+      그런데 다르게 보이는 건, 사람 눈이 색을 <b>옆에 있는 색과 비교해서</b> 받아들이기 때문입니다.
+      실제 퍼스널컬러 진단에서 천을 목에 대어보는 것도 똑같은 원리예요.
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- 3. 추천 색 -->
+  <section>
+    <h2>나에게 잘 받는 색</h2>
+    <p class="sub">{{ r.info.likeness }}</p>
+    <div class="colors">
+      {% for name, hx in r.info.palette %}
+      <div class="color-chip"><div class="box" style="background:{{ hx }}"></div><span>{{ name }}</span></div>
+      {% endfor %}
+    </div>
+    {% if r.best|length > 1 %}
+    <div style="margin-top:16px">
+      {% for b in r.best %}
+      <div class="pick">
+        <div class="pick-head"><span class="rank">{{ loop.index }}</span><i class="sw" style="background:{{ b.hex }}"></i>{{ b.name }}</div>
+        {% if b.why_short %}<ul class="why">{% for w in b.why_short %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- 4. 피할 색 -->
+  <section>
+    <h2>피하면 좋은 색</h2>
+    <p class="sub">안 어울린다기보다, 얼굴이 손해 보는 색입니다.</p>
+    <p class="sub" style="margin-bottom:6px">{{ r.info.label }} 타입이 일반적으로 피하는 색</p>
+    <div class="colors">
+      {% for name, hx in r.info.avoid %}
+      <div class="color-chip"><div class="box" style="background:{{ hx }}"></div><span>{{ name }}</span></div>
+      {% endfor %}
+    </div>
+    <p class="sub" style="margin:18px 0 2px">내 측정값 기준으로 가장 안 맞는 색</p>
+    <div>
+      {% for w in r.worst %}
+      <div class="pick">
+        <div class="pick-head"><i class="sw" style="background:{{ w.hex }}"></i>{{ w.name }}</div>
+        {% if w.why_short %}<ul class="why">{% for t in w.why_short %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- 5. 메이크업 · 헤어 -->
+  <section>
+    <h2>메이크업 · 헤어</h2>
+    <table>
+      {% for k, v in r.info.makeup.items() %}
+      <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+
+  <!-- 6. 내 타입 특징 -->
+  <section>
+    <h2>{{ r.info.label }} 의 특징</h2>
+    <p class="sub">{{ r.info.image }}</p>
+    <table>
+      {% for k, v in r.info.features.items() %}
+      <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+      {% endfor %}
+      {% for name, desc in r.info.subtypes %}
+      <tr><td>{{ name }}</td><td>{{ desc }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+
+  <!-- 7. 시즌 가이드 사진 -->
+  {% if guide_images %}
+  <section>
+    <h2>스타일 가이드</h2>
+    <p class="sub">{{ r.info.label }} 에게 어울리는 코디와 화장품</p>
+    <div class="guide-imgs">
+      {% for src in guide_images %}<img src="{{ src }}" alt="시즌 가이드">{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="dl">
+    <h2>결과 저장하기</h2>
+    <p class="sub">이 리포트를 처음부터 끝까지 한 장에 담았어요.<br>
+      <b>휴대폰이면 아래 이미지를 길게 눌러</b> "사진에 저장"을 누르세요.</p>
+    <figure class="dl-page">
+      <img src="{{ url_for('report_full_png', capture_id=capture_id) }}" alt="리포트 전체">
+      <a class="dl-save" href="{{ url_for('report_full_png', capture_id=capture_id, dl=1) }}"
+         download>전체 내려받기</a>
+    </figure>
+  </section>
+
+  <p class="meta">
+    촬영 기록 {{ capture_id }}<br>
+    이 리포트는 촬영한 사진을 기준으로 자동 생성되었습니다.<br>
+    조명과 카메라에 따라 결과가 달라질 수 있어요.
+  </p>
+</div>
+
+</body>
+</html>

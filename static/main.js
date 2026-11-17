@@ -276,6 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         lastBestGroup = data.best_group || '';        // 드레이핑 버튼이 쓸 시즌
 
         renderSeasonGuide(data.best_group);
+        renderReportQR(data);
         applySeasonTheme(data.best_group);
         listContainer.querySelectorAll('.percentage-value').forEach((el, i) =>
             countUp(el, Number(data.percentages[i].value)));
@@ -294,6 +295,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         corrected.style.filter = '';
         corrected.src = data.corrected_image || imageUrl;
         centerOnFace(corrected);
+    }
+
+    // 결과 리포트 QR — 촬영 기록 ID 가 그대로 리포트 주소가 된다
+    function renderReportQR(data) {
+        const card = document.getElementById('report-qr-card');
+        if (!card) return;
+        if (!data.capture_id || !data.report_url) {   // SAVE_CAPTURES=0 이면 리포트가 없다
+            card.classList.add('hidden');
+            return;
+        }
+        const img = document.getElementById('report-qr');
+        img.style.display = '';
+        // qrcode 라이브러리가 설치 안 돼 있으면 503 → 이미지는 숨기고 주소만 보여준다
+        img.onerror = () => { img.style.display = 'none'; };
+        img.src = '/qr/' + encodeURIComponent(data.capture_id) + '.png?t=' + Date.now();
+        document.getElementById('report-url').textContent = data.report_url;
+        document.getElementById('report-link').href = '/report/' + encodeURIComponent(data.capture_id);
+        card.classList.remove('hidden');
     }
 
     // ===== 6. 시즌 컬러 휠에 내 얼굴 합성 =====

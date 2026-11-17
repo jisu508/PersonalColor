@@ -14,7 +14,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
 
     <!-- 외부 CSS (캐시 때문에 수정할 때마다 v 숫자를 올리세요) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=12">
     <link rel="stylesheet" href="{{ url_for('static', filename='draping.css') }}?v=2">
     <link rel="stylesheet" href="{{ url_for('static', filename='clothes.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='makeup/makeup.css') }}?v=1">
@@ -150,6 +150,15 @@
                 </div>
             </div>
 
+            <!-- 결과 리포트 QR (app.py /qr/<id>.png) -->
+            <div class="card report-qr-card hidden" id="report-qr-card">
+                <h2>휴대폰으로 결과 받기</h2>
+                <p>QR을 찍으면 내 퍼스널컬러 설명, 잘 받는 색·안 받는 색 비교, 메이크업 가이드를 한 번에 볼 수 있어요.</p>
+                <img id="report-qr" src="" alt="결과 리포트 QR 코드">
+                <p class="qr-url" id="report-url"></p>
+                <a id="report-link" class="btn-secondary" href="#" target="_blank" rel="noopener">이 화면에서 바로 열기</a>
+            </div>
+
             <div class="mt-20">
                 <button id="reset-btn" class="btn-secondary">다시 검사하기</button>
             </div>
@@ -182,6 +191,6 @@
     <script src="{{ url_for('static', filename='draping.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='clothes.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='makeup/makeup.js') }}?v=1"></script>
-    <script src="{{ url_for('static', filename='main.js') }}?v=12"></script>
+    <script src="{{ url_for('static', filename='main.js') }}?v=13"></script>
 </body>
 </html>

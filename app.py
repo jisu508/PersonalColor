@@ -11,17 +11,23 @@ Flask 서버 — 메인 화면 + 촬영·진단 화면 + 진단 API
 실행:  python app.py   →  http://127.0.0.1:5000
 """
 import base64
+import io
 import json
 import os
+import re
+import socket
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 import cv2
-from flask import Flask, jsonify, render_template, request
+from flask import (Flask, abort, jsonify, render_template, request,
+                   send_from_directory, Response)
 
-from backend.image_io import imdecode_bytes, imwrite
+from backend.image_io import imdecode_bytes, imread, imwrite
 from backend.pipeline import run_pipeline
+from backend.report import (build_report, make_card, make_page_colors,
+                            make_page_style, make_long)
 
 app = Flask(__name__)
 
@@ -57,8 +63,11 @@ def _log_error(e: BaseException) -> None:
         pass
 
 
-def _save_capture(original, corrected, result: dict) -> None:
-    """촬영 원본·보정본·판정 숫자를 data/captures/ 에 남긴다 (깃에는 안 올라감)"""
+def _save_capture(original, corrected, result: dict) -> str | None:
+    """촬영 원본·보정본·판정 숫자를 data/captures/ 에 남기고, 그 폴더 이름(ID)을 돌려준다.
+
+    이 ID 가 리포트 주소가 된다 →  /report/<ID>
+    """
     try:
         stamp = datetime.now().strftime("%m%d_%H%M%S_%f")[:-3]   # 밀리초까지 (같은 초에 두 장 찍어도 안 겹치게)
         d = CAPTURE_DIR / stamp
@@ -69,8 +78,10 @@ def _save_capture(original, corrected, result: dict) -> None:
         keep = {k: v for k, v in result.items() if k != "corrected_image"}
         (d / "result.json").write_text(json.dumps(keep, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[촬영 기록] {d}")
+        return stamp
     except Exception:                      # 기록 실패가 진단을 막으면 안 된다
         traceback.print_exc()
+    return None
 
 
 def _valid_box(box):
@@ -175,8 +186,10 @@ def diagnose():
     images = result.pop("images", None) or {}
     result = _jsonable(result)          # numpy 숫자를 파이썬 숫자로 (jsonify 가 numpy 를 못 다룬다)
 
-    if SAVE_CAPTURES:
-        _save_capture(img, images.get("corrected"), result)
+    capture_id = _save_capture(img, images.get("corrected"), result) if SAVE_CAPTURES else None
+    result["capture_id"] = capture_id
+    # 폰으로 열 주소라 localhost 가 아니라 공유기가 준 주소여야 한다
+    result["report_url"] = f"http://{_lan_ip()}:5000/report/{capture_id}" if capture_id else None
     result["corrected_image"] = _to_data_url(images["corrected"]) if "corrected" in images else None
 
     if not result["ok"]:
@@ -192,6 +205,182 @@ def diagnose():
     return jsonify(result)
 
 
+# ─────────────────────────────────────────────────────────────
+#  결과 요약 리포트 — 진단이 끝나면 QR 로 폰에서 열어본다
+# ─────────────────────────────────────────────────────────────
+CAPTURE_ID_RE = re.compile(r"^\d{4}_\d{6}_\d{1,6}$")      # 예) 1111_093706_522
+DRAPE_FILES = {"drape_best.jpg", "drape_worst.jpg", "corrected.jpg", "full.png"}
+
+# 시즌별 가이드 사진 (static/images/)
+GUIDE_IMAGES = {
+    "spring_warm": ["최종_봄.png", "봄_화장품.png", "봄_코디.png"],
+    "summer_cool": ["최종_여름.png", "여름_화장품.png", "여름_코디.png"],
+    "autumn_warm": ["최종_가을.png", "가을_화장품.png", "가을_코디.png"],
+    "winter_cool": ["최종_겨울.png", "겨울_화장품.png", "겨울_코디.png"],
+}
+
+
+def _lan_ip() -> str:
+    """공유기가 이 노트북에 준 주소. 폰에서 QR 로 접속하려면 이 주소여야 한다.
+
+    127.0.0.1 은 노트북 자기 자신만 가리켜서 폰에서는 안 열린다.
+    (실제로 패킷을 보내지는 않고, 라우팅 테이블만 확인한다)
+    """
+    try:
+        sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sk.connect(("8.8.8.8", 80))
+        ip = sk.getsockname()[0]
+        sk.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def _capture_dir(capture_id: str) -> Path:
+    """촬영 기록 폴더. 주소에 들어온 값이라 형식을 반드시 검사한다(경로 탈출 방지)."""
+    if not CAPTURE_ID_RE.match(capture_id or ""):
+        abort(404)
+    d = CAPTURE_DIR / capture_id
+    if not (d / "result.json").exists():
+        abort(404)
+    return d
+
+
+@app.route("/report/<capture_id>")
+def report_page(capture_id):
+    d = _capture_dir(capture_id)
+    result = json.loads((d / "result.json").read_text(encoding="utf-8"))
+
+    # 비교 사진은 '조명 보정본' 을 쓴다. 원본은 방 조명 색이 섞여 있어
+    # 어떤 색이 받는지 판단하는 데 쓰면 안 된다. 없을 때만 원본으로 넘어간다.
+    corrected, used = None, None
+    for name in ("corrected.jpg", "original.jpg"):
+        if (d / name).exists():
+            try:
+                corrected = imread(d / name)
+                used = name
+                break
+            except Exception:
+                pass
+
+    r = build_report(result, capture_dir=d, corrected_bgr=corrected, photo_source=used)
+
+    base = Path(app.static_folder) / "images"
+    guide = [f"/static/images/{n}" for n in GUIDE_IMAGES.get(r["season_key"], [])
+             if (base / n).exists()]
+
+    return render_template("report.html", r=r, capture_id=capture_id, guide_images=guide)
+
+
+@app.route("/report/<capture_id>/img/<filename>")
+def report_image(capture_id, filename):
+    """리포트에 들어가는 사진. data/captures/ 는 static 밖이라 따로 내보낸다."""
+    d = _capture_dir(capture_id)
+    if filename not in DRAPE_FILES:
+        abort(404)
+    return send_from_directory(d.resolve(), filename)
+
+
+PAGE_MAKERS = {"1": None, "2": make_page_colors, "3": make_page_style}
+
+
+def _report_of(capture_id):
+    """리포트 dict 와 촬영 폴더를 함께 돌려준다 (여러 라우트가 같이 쓴다)"""
+    d = _capture_dir(capture_id)
+    result = json.loads((d / "result.json").read_text(encoding="utf-8"))
+    corrected, used = None, None
+    for name in ("corrected.jpg", "original.jpg"):
+        if (d / name).exists():
+            try:
+                corrected = imread(d / name)
+                used = name
+                break
+            except Exception:
+                pass
+    return d, build_report(result, capture_dir=d, corrected_bgr=corrected, photo_source=used)
+
+
+@app.route("/report/<capture_id>/full.png")
+def report_full_png(capture_id):
+    """리포트 전체를 긴 사진 한 장으로. PIL 로 그리므로 외부 브라우저가 필요 없다.
+
+    한 번 만들면 data/captures/<id>/full.png 에 저장해두고 다시 쓴다.
+    """
+    d = _capture_dir(capture_id)
+    out = d / "full.png"
+    if not out.exists():
+        r = _report_of(capture_id)[1]
+        out.write_bytes(make_long(r, d, Path(app.static_folder) / "images"))
+    headers = {"Cache-Control": "no-store"}
+    if request.args.get("dl"):
+        headers["Content-Disposition"] = \
+            f'attachment; filename="personal-color-{capture_id}.png"'
+    return Response(out.read_bytes(), mimetype="image/png", headers=headers)
+
+
+@app.route("/report/<capture_id>/page<int:n>.png")
+def report_page_img(capture_id, n):
+    """리포트 전체를 이미지 여러 장으로. 1=요약·비교 2=색 3=스타일"""
+    if str(n) not in PAGE_MAKERS:
+        abort(404)
+    maker = PAGE_MAKERS[str(n)]
+    d, r = _report_of(capture_id)
+    png = make_card(r, d) if maker is None else maker(r)
+
+    # 기본은 '인라인'. attachment 로 내려보내면 브라우저가 파일로만 취급해서
+    # 폰에서 이미지를 길게 눌러도 "사진에 저장" 이 안 뜬다.
+    # 눌러서 받는 버튼만 ?dl=1 을 붙여 attachment 로 준다.
+    headers = {"Cache-Control": "no-store"}
+    if request.args.get("dl"):
+        headers["Content-Disposition"] = \
+            f'attachment; filename="personal-color-{capture_id}-{n}.png"'
+    return Response(png, mimetype="image/png", headers=headers)
+
+
+@app.route("/report/<capture_id>/card.png")
+def report_card(capture_id):
+    """저장용 카드 이미지. QR 로 들어온 사람이 눌러서 갤러리에 담아간다."""
+    d = _capture_dir(capture_id)
+    result = json.loads((d / "result.json").read_text(encoding="utf-8"))
+
+    corrected, used = None, None
+    for name in ("corrected.jpg", "original.jpg"):
+        if (d / name).exists():
+            try:
+                corrected = imread(d / name)
+                used = name
+                break
+            except Exception:
+                pass
+
+    r = build_report(result, capture_dir=d, corrected_bgr=corrected, photo_source=used)
+    png = make_card(r, d)
+    return Response(png, mimetype="image/png", headers={
+        "Content-Disposition": f'attachment; filename="personal-color-{capture_id}.png"',
+        "Cache-Control": "no-store",
+    })
+
+
+@app.route("/qr/<capture_id>.png")
+def qr_png(capture_id):
+    """리포트 주소를 담은 QR. 주소는 서버가 직접 만든다(외부 입력 안 받음)."""
+    _capture_dir(capture_id)
+    try:
+        import qrcode
+    except ImportError:
+        # 라이브러리가 없으면 QR 대신 안내 (화면에서는 주소를 글자로 보여준다)
+        abort(503)
+    url = f"http://{_lan_ip()}:5000/report/{capture_id}"
+    img = qrcode.make(url, box_size=8, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return Response(buf.getvalue(), mimetype="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
 if __name__ == '__main__':
-    # debug=True 로 두면 코드를 수정할 때마다 서버가 자동 재시작된다
-    app.run(debug=True)
+    # host='0.0.0.0' 이어야 같은 와이파이의 폰에서 QR 로 접속할 수 있다
+    # (기본값은 노트북 자기 자신만 접속 가능)
+    print(f"\n  이 컴퓨터:  http://127.0.0.1:5000")
+    print(f"  폰에서:     http://{_lan_ip()}:5000   ← 같은 와이파이여야 합니다\n")
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
